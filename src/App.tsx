@@ -1,34 +1,46 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import TimelineTrack from "./components/TimelineTrack";
-import TimelineNode from "./components/TimelineNode";
+import TimelineNode, { type NodeStatus } from "./components/TimelineNode";
 
-// [t1, t2, date, icon]
-type NodeData = [string, string, string, string];
+// [t1, t2, date, icon, progress]
+type NodeData = [string, string, string, string, number];
 
 const nodes: NodeData[] = [
-  ["بداية وصول",              "الحجاج",                       "2026-04-18", "pilgrim"],
-  ["استلام المخيمات",          "جاهزة",                        "2026-04-18", "camping"],
-  ["ادخال بيانات",             "الاستعداد المسبق",             "2026-03-25", "approved"],
-  ["اصدار",                    "التأشيرات",                    "2026-03-20", "passport"],
-  ["رفع بيانات الحجاج",        "وتكوين المجموعات",             "2026-02-08", "group"],
-  ["الانتهاء من التعاقدات",     "على خدمات النقل",              "2026-02-01", "logistic"],
-  ["الانتهاء من التعاقدات",     "على السكن",                    "2026-02-01", "home"],
-  ["تحويل الأموال للسكن",       "وخدمات النقل",                 "2026-01-20", "accommodation"],
-  ["تعيين الناقلات الجوية",     "وجدولة الرحلات",               "2026-01-04", "airplane"],
-  ["التعاقد على حزم الخدمات",   "ودفع قيمتها",                  "2026-01-04", "box"],
-  ["تحويل الأموال المطلوبة",    "للتعاقد على الخدمات الأساسية", "2025-12-21", "credit-card"],
-  ["توقيع اتفاقية",            "رغبات التفويج",                "2025-11-09", "application"],
-  ["توثيق التعاقدات",           "مع الشركات في مؤتمر الحج",     "2025-11-09", "contract"],
-  ["توقيع اتفاقياة",           "وترتيب شؤون الحجاج",           "2025-11-09", "agreement"],
-  ["الموعد النهائي لإعلان",     "تسجيل الحجاج",                 "2025-10-12", "calendar"],
-  ["بدأ الاجتماعات",            "التحضيرية",                    "2025-10-12", "people"],
-  ["تأكيد الاحتفاظ بالمخيمات",  "من الموسم السابق",             "2025-08-23", "folder"],
-  ["الاطلاع على بيانات المخيمات","عبر منصة نسك مسار",            "2025-07-26", "data"],
-  ["استلام نموذج التوعية",      "للضيوف الرحمن",                "2025-06-08", "checklist"],
-  ["استلام وثيقة",             "الترتيبات الأولية والبرنامج",   "2025-06-08", "document"],
+  ["بداية وصول",              "الحجاج",                       "2026-04-18", "pilgrim",     100],
+  ["استلام المخيمات",          "جاهزة",                        "2026-04-18", "camping",     100],
+  ["ادخال بيانات",             "الاستعداد المسبق",             "2026-03-25", "approved",    100],
+  ["اصدار",                    "التأشيرات",                    "2026-03-20", "passport",    100],
+  ["رفع بيانات الحجاج",        "وتكوين المجموعات",             "2026-02-08", "group",       100],
+  ["الانتهاء من التعاقدات",     "على خدمات النقل",              "2026-02-01", "logistic",    100],
+  ["الانتهاء من التعاقدات",     "على السكن",                    "2026-02-01", "home",        100],
+  ["تحويل الأموال للسكن",       "وخدمات النقل",                 "2026-01-20", "accommodation",100],
+  ["تعيين الناقلات الجوية",     "وجدولة الرحلات",               "2026-01-04", "airplane",    100],
+  ["التعاقد على حزم الخدمات",   "ودفع قيمتها",                  "2026-01-04", "box",         100],
+  ["تحويل الأموال المطلوبة",    "للتعاقد على الخدمات الأساسية", "2025-12-21", "credit-card", 100],
+  ["توقيع اتفاقية",            "رغبات التفويج",                "2025-11-09", "application", 100],
+  ["توثيق التعاقدات",           "مع الشركات في مؤتمر الحج",     "2025-11-09", "contract",    100],
+  ["توقيع اتفاقياة",           "وترتيب شؤون الحجاج",           "2025-11-09", "agreement",   100],
+  ["الموعد النهائي لإعلان",     "تسجيل الحجاج",                 "2025-10-12", "calendar",    100],
+  ["بدأ الاجتماعات",            "التحضيرية",                    "2025-10-12", "people",      100],
+  ["تأكيد الاحتفاظ بالمخيمات",  "من الموسم السابق",             "2025-08-23", "folder",      100],
+  ["الاطلاع على بيانات المخيمات","عبر منصة نسك مسار",            "2025-07-26", "data",        100],
+  ["استلام نموذج التوعية",      "للضيوف الرحمن",                "2025-06-08", "checklist",   100],
+  ["استلام وثيقة",             "الترتيبات الأولية والبرنامج",   "2025-06-08", "document",    100],
 ];
 
-function nodeStyle(i: number) {
+function getNodeStatus(progress: number, date: string): NodeStatus {
+  const pastDue = new Date(date).getTime() <= Date.now();
+  if (progress === 100 && pastDue) return "success";
+  if (progress === 100) return "default";
+  if (pastDue && progress > 50) return "warning";
+  if (pastDue) return "danger";
+  return "default";
+}
+
+function getNodeFill(status: NodeStatus, i: number): { fill: string; stroke: string } {
+  if (status === "success") return { fill: "url(#gSuccess)", stroke: "#86efac" };
+  if (status === "warning") return { fill: "url(#gWarning)", stroke: "#fcd34d" };
+  if (status === "danger")  return { fill: "url(#gDanger)",  stroke: "#fca5a5" };
   const ri = nodes.length - 1 - i;
   const gold = (ri >= 4 && ri < 8) || (ri >= 12 && ri < 16);
   return gold
@@ -36,18 +48,12 @@ function nodeStyle(i: number) {
     : { fill: "url(#gBlue)", stroke: "#5a7ad8" };
 }
 
-function findCurrentStage() {
+const currentIdx = (() => {
   const now = Date.now();
   const firstPastIdx = nodes.findIndex(([, , d]) => new Date(d).getTime() <= now);
-  if (firstPastIdx <= 0) return { idx: 0, pct: 0 };
-  const idx = firstPastIdx - 1;
-  const prev = new Date(nodes[firstPastIdx][2]).getTime();
-  const next = new Date(nodes[idx][2]).getTime();
-  const pct = Math.round(((now - prev) / (next - prev)) * 100);
-  return { idx, pct: Math.max(0, Math.min(100, pct)) };
-}
-
-const { idx: currentIdx, pct: progress } = findCurrentStage();
+  if (firstPastIdx <= 0) return 0;
+  return firstPastIdx - 1;
+})();
 
 const todayHijri = new Intl.DateTimeFormat("ar-SA", {
   calendar: "islamic-umalqura",
@@ -56,11 +62,6 @@ const todayHijri = new Intl.DateTimeFormat("ar-SA", {
   year: "numeric",
 }).format(new Date());
 
-const todayGregorian = new Intl.DateTimeFormat("ar-SA", {
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-}).format(new Date());
 
 export default function App() {
   const pathRef = useRef<SVGPathElement>(null);
@@ -114,43 +115,47 @@ export default function App() {
   }, []);
 
   return (
-    <div className="w-full max-w-[1990px] mx-auto lg:pr-15 lg:pl-25 pl-5 md:pl-10 relative">
-      <svg viewBox="0 0 1600 884" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" direction="ltr">
-        <TimelineTrack pathRef={pathRef} />
+    <div className="min-h-screen bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: "url('/background.jpeg')" }}>
+      <div className="w-full max-w-[1990px] mx-auto lg:pr-15 lg:pl-25 pl-5 md:pl-10">
+        <svg viewBox="0 0 1600 884" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" direction="ltr">
+          <TimelineTrack pathRef={pathRef} />
 
-        {points.length > 0 && (() => {
-          const hx = points[0][0] / 2;
-          const hy = points[0][1];
-          return (
-            <g className="header-fade">
-              <image href="/logo-4.png" x={hx - 120} y={hy - 120} width="240" height="110" />
-              <text x={hx} y={hy + 10} fontSize="26" fontWeight="700" fill="#334278" textAnchor="middle">
-                الجدول الزمني لمهام
-                <tspan x={hx} dy="1.3em">مكاتب شؤون الحج</tspan>
-              </text>
+          {points.length > 0 && (() => {
+            const hx = points[0][0] / 2;
+            const hy = points[0][1];
+            return (
+              <g className="header-fade">
+                <rect x={hx - 155} y={hy - 145} width="310" height="260" rx="16"
+                  fill="white" opacity="0.95" filter="url(#fShadow)" />
 
-              <rect x={hx - 100} y={hy + 55} width="200" height="52" rx="10"
-                fill="#f8f4e8" stroke="#c9a227" strokeWidth="1" />
-              <text x={hx} y={hy + 76} fontSize="13" fontWeight="700" fill="#334278" textAnchor="middle">
-                {todayHijri}
-              </text>
-              <text x={hx} y={hy + 96} fontSize="12" fontWeight="600" fill="#8a7a4a" textAnchor="middle">
-                {todayGregorian}
-              </text>
-            </g>
-          );
-        })()}
+                <image href="/logorajhi.png" x={hx - 130} y={hy - 135} width="260" height="120" />
 
-        {points.map(([cx, cy], i) => {
-          const [t1, t2, date, icon] = nodes[i];
-          const { fill, stroke } = nodeStyle(i);
-          return (
-            <TimelineNode key={i} cx={cx} cy={cy} t1={t1} t2={t2} date={date}
-              icon={icon} fill={fill} stroke={stroke}
-              progress={i === currentIdx ? progress : undefined} index={i} />
-          );
-        })}
-      </svg>
+                <text x={hx} y={hy + 20} fontSize="26" fontWeight="700" fill="#334278" textAnchor="middle">
+                  الجدول الزمني لمهام
+                  <tspan x={hx} dy="1.3em">مكاتب شؤون الحج</tspan>
+                </text>
+
+                <text x={hx} y={hy + 90} fontSize="14" fontWeight="700" fill="#8a7a4a" textAnchor="middle">
+                  {todayHijri}
+                </text>
+              </g>
+            );
+          })()}
+
+          {points.map(([cx, cy], i) => {
+            const [t1, t2, date, icon, prog] = nodes[i];
+            const status = getNodeStatus(prog, date);
+            const { fill, stroke } = getNodeFill(status, i);
+            return (
+              <TimelineNode key={i} cx={cx} cy={cy} t1={t1} t2={t2} date={date}
+                icon={icon} fill={fill} stroke={stroke}
+                progress={prog} status={status} index={i}
+                isCurrent={i === currentIdx} />
+            );
+          })}
+        </svg>
+      </div>
     </div>
   );
 }

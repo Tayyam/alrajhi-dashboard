@@ -20,6 +20,21 @@ export default function TimelineTrack({ pathRef }: Props) {
           <stop offset="55%" stopColor="#9B7619" />
           <stop offset="100%" stopColor="#C8AA5D" />
         </radialGradient>
+        <radialGradient id="gSuccess" cx="40%" cy="35%" r="65%">
+          <stop offset="0%" stopColor="#4ade80" />
+          <stop offset="55%" stopColor="#16a34a" />
+          <stop offset="100%" stopColor="#15803d" />
+        </radialGradient>
+        <radialGradient id="gWarning" cx="40%" cy="35%" r="65%">
+          <stop offset="0%" stopColor="#fbbf24" />
+          <stop offset="55%" stopColor="#d97706" />
+          <stop offset="100%" stopColor="#92400e" />
+        </radialGradient>
+        <radialGradient id="gDanger" cx="40%" cy="35%" r="65%">
+          <stop offset="0%" stopColor="#f87171" />
+          <stop offset="55%" stopColor="#dc2626" />
+          <stop offset="100%" stopColor="#991b1b" />
+        </radialGradient>
         <filter id="fShadow" x="-40%" y="-40%" width="180%" height="180%">
           <feDropShadow dx="0" dy="4" stdDeviation="7" floodColor="#00000044" />
         </filter>
