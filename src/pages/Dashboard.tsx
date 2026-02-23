@@ -22,6 +22,12 @@ const ICON_OPTIONS = [
 ];
 
 const emptyForm = { title: "", date: "", icon: "document", progress: 0 };
+
+function formatDateAr(dateStr: string) {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString("ar-SA-u-nu-latn", { calendar: "islamic-umalqura", day: "2-digit", month: "2-digit", year: "numeric" });
+}
 const emptyAccount = { email: "", password: "", role: "user" as "admin" | "user" };
 
 export default function Dashboard() {
@@ -538,7 +544,7 @@ export default function Dashboard() {
                     <tr key={node.id} className={`border-b border-gray-100 hover:bg-gray-50/50 transition ${saving === node.id ? "opacity-50" : ""}`}>
                       <td className="px-4 py-3 whitespace-nowrap"><span className="text-gray-400 font-mono text-xs">{idx + 1}</span></td>
                       <td className="px-4 py-3 font-medium whitespace-nowrap">{node.title}</td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap" dir="ltr">{node.date}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDateAr(node.date)}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <img src={iconUrl(node.icon)} alt={node.icon} className="w-6 h-6" />
