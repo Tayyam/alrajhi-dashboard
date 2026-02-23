@@ -213,7 +213,8 @@ export default function Dashboard() {
     const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
     const now = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const fileName = `backup_${now}.xlsx`;
-    const { error } = await supabase.storage.from("backups").upload(fileName, new Blob([buf]), { contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const xlsxMime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    const { error } = await supabase.storage.from("backups").upload(fileName, new Blob([buf], { type: xlsxMime }), { contentType: xlsxMime });
     if (error) showToast("خطأ: " + error.message, "err");
     else showToast("تم حفظ النسخة الاحتياطية على السيرفر", "ok");
     setSaving(null);
