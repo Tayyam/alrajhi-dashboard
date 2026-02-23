@@ -1,10 +1,11 @@
+import { iconUrl } from "../lib/supabase";
+
 export type NodeStatus = "success" | "warning" | "danger" | "default";
 
 interface TimelineNodeProps {
   cx: number;
   cy: number;
-  t1: string;
-  t2: string;
+  title: string;
   date: string;
   icon: string;
   fill: string;
@@ -23,6 +24,13 @@ const hijriFormatter = new Intl.DateTimeFormat("ar-SA", {
 });
 const toHijri = (d: string) => hijriFormatter.format(new Date(d));
 
+function splitTitle(text: string): [string, string] {
+  const words = text.split(" ");
+  if (words.length <= 1) return [text, "\u200B"];
+  const mid = Math.ceil(words.length / 2);
+  return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
+}
+
 const statusTextColor: Record<NodeStatus, string> = {
   success: "#16a34a",
   warning: "#d97706",
@@ -37,17 +45,18 @@ const statusRingColor: Record<NodeStatus, string> = {
   default: "#C8AA5D",
 };
 
-export default function TimelineNode({ cx, cy, t1, t2, date, icon, fill, stroke, progress, status, index, isCurrent }: TimelineNodeProps) {
+export default function TimelineNode({ cx, cy, title, date, icon, fill, stroke, progress, status, index, isCurrent }: TimelineNodeProps) {
   const hijriDate = toHijri(date);
   const textColor = statusTextColor[status];
   const ringColor = statusRingColor[status];
+  const [line1, line2] = splitTitle(title);
 
   return (
     <g className="timeline-node" style={{ animationDelay: `${index * 0.06}s` }}>
       <text x={cx} y={cy - 105} textAnchor="middle">
-        <tspan fontSize="16" fontWeight="700" x={cx} dy="0">{t1}</tspan>
-        <tspan fontSize="16" fontWeight="700" x={cx} dy="1.4em">{t2}</tspan>
-        <tspan fontSize="15" fontWeight="700" fill="#b87200" x={cx} dy="1.4em">{hijriDate}</tspan>
+        <tspan fontSize="15" fontWeight="700" x={cx} dy="0">{line1}</tspan>
+        <tspan fontSize="15" fontWeight="700" x={cx} dy="1.4em">{line2}</tspan>
+        <tspan fontSize="14" fontWeight="700" fill="#b87200" x={cx} dy="1.4em">{hijriDate}</tspan>
       </text>
 
       {isCurrent && (
@@ -69,7 +78,7 @@ export default function TimelineNode({ cx, cy, t1, t2, date, icon, fill, stroke,
         strokeWidth="4.2" filter="url(#fShadow)" />
 
       <image x={cx - 16} y={cy - 16} width="32" height="32"
-        href={`/icons/${icon}.png`} style={{ filter: "brightness(0) invert(1)" }} />
+        href={iconUrl(icon)} style={{ filter: "brightness(0) invert(1)" }} />
 
       <text x={cx} y={cy + 68} textAnchor="middle"
         fontSize="14" fontWeight="700" fill={textColor}>
