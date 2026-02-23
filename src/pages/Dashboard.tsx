@@ -220,6 +220,16 @@ export default function Dashboard() {
     setSaving(null);
   }
 
+  function handleExportExcel() {
+    const d = nodes.map((n) => ({ "العنوان": n.title, "التاريخ": n.date, "الأيقونة": n.icon, "نسبة الإكتمال (%)": n.progress }));
+    const ws = XLSX.utils.json_to_sheet(d);
+    ws["!cols"] = [{ wch: 45 }, { wch: 14 }, { wch: 16 }, { wch: 18 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "البيانات");
+    XLSX.writeFile(wb, `timeline_data.xlsx`);
+    showToast("تم تصدير الملف", "ok");
+  }
+
   async function handleUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -329,6 +339,12 @@ export default function Dashboard() {
             <button onClick={() => setShowAdd(true)} className={btnP} style={{ background: S }}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
               <span className="hidden sm:inline">إضافة مهمة</span>
+            </button>
+
+            {/* Export Excel */}
+            <button onClick={handleExportExcel} className={btnO} style={{ borderColor: "rgba(255,255,255,.25)", color: "white" }}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3a2 2 0 002 2h14a2 2 0 002-2v-3" /></svg>
+              <span className="hidden sm:inline">تصدير Excel</span>
             </button>
 
             {/* Backup */}
