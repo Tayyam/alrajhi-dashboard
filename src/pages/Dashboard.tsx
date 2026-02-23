@@ -50,6 +50,8 @@ export default function Dashboard() {
 
   const [iconList, setIconList] = useState<string[]>([]);
   const [assetTs, setAssetTs] = useState(Date.now());
+  const [pendingIcon, setPendingIcon] = useState<{ file: File; setForm: (fn: (f: typeof emptyForm) => typeof emptyForm) => void; oldIcon?: string } | null>(null);
+  const [iconName, setIconName] = useState("");
 
   const fileRef = useRef<HTMLInputElement>(null);
   const editIconRef = useRef<HTMLInputElement>(null);
@@ -110,17 +112,27 @@ export default function Dashboard() {
 
   function msg(text: string, type: "ok" | "err") { setToast({ msg: text, type }); }
 
-  async function uploadNewIcon(e: ChangeEvent<HTMLInputElement>, setForm: (fn: (f: typeof emptyForm) => typeof emptyForm) => void, oldIcon?: string) {
+  function onIconFileSelect(e: ChangeEvent<HTMLInputElement>, setForm: (fn: (f: typeof emptyForm) => typeof emptyForm) => void, oldIcon?: string) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const name = file.name.replace(/\s+/g, "-").replace(/\.png$/i, "").toLowerCase();
+    const suggested = file.name.replace(/\s+/g, "-").replace(/\.png$/i, "").toLowerCase().replace(/[^a-z0-9-]/g, "");
+    setIconName(suggested);
+    setPendingIcon({ file, setForm, oldIcon });
+    [editIconRef, addIconRef].forEach((r) => { if (r.current) r.current.value = ""; });
+  }
+
+  async function confirmIconUpload() {
+    if (!pendingIcon) return;
+    const name = iconName.trim().toLowerCase().replace(/\s+/g, "-");
+    if (!name || !/^[a-z][a-z0-9-]*$/.test(name)) { msg("الاسم يجب أن يبدأ بحرف ويحتوي فقط على أحرف إنجليزية وأرقام وشرطات", "err"); return; }
+    const { file, setForm, oldIcon } = pendingIcon;
     setSaving(-1);
     if (oldIcon && oldIcon !== name) await supabase.storage.from("icons").remove([`${oldIcon}.png`]);
     const { error } = await supabase.storage.from("icons").upload(`${name}.png`, file, { upsert: true, contentType: file.type });
     if (error) msg("خطأ: " + error.message, "err");
     else { await fetchIcons(); setForm((prev) => ({ ...prev, icon: name })); msg(`تم رفع أيقونة ${name}`, "ok"); }
     setSaving(null);
-    [editIconRef, addIconRef].forEach((r) => { if (r.current) r.current.value = ""; });
+    setPendingIcon(null); setIconName("");
   }
 
   async function handleAdd() {
@@ -264,7 +276,7 @@ export default function Dashboard() {
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 6l-4-4m0 0L8 6m4-4v13" /></svg>
             رفع أيقونة جديدة
             <input ref={ref} type="file" accept="image/png" className="hidden"
-              onChange={(e) => uploadNewIcon(e, (fn) => setForm(fn(form)), oldIcon)} />
+              onChange={(e) => onIconFileSelect(e, (fn) => setForm(fn(form)), oldIcon)} />
           </label>
         </div>
       </div>
@@ -368,6 +380,30 @@ export default function Dashboard() {
 
       <ConfirmModal open={showDeleteAll} onClose={() => setShowDeleteAll(false)} onConfirm={handleDeleteAll}
         title="حذف جميع المهام" desc={`سيتم حذف جميع المهام (${nodes.length}) نهائياً. ننصح بأخذ نسخة احتياطية أولاً.`} confirmLabel="حذف الكل" />
+
+      <Modal open={!!pendingIcon} onClose={() => { setPendingIcon(null); setIconName(""); }} title="تسمية الأيقونة" sm>
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">أدخل اسماً واضحاً للأيقونة باللغة الإنجليزية فقط.</p>
+          <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-500 space-y-1">
+            <p>- استخدم أحرف إنجليزية صغيرة (a-z) وأرقام (0-9) وشرطات (-)</p>
+            <p>- يجب أن يبدأ الاسم بحرف إنجليزي</p>
+            <p>- أمثلة: <span className="font-mono text-gray-700">calendar</span>, <span className="font-mono text-gray-700">check-list</span>, <span className="font-mono text-gray-700">airplane-2</span></p>
+          </div>
+          <input value={iconName}
+            onChange={(e) => setIconName(e.target.value.replace(/[^a-zA-Z0-9-]/g, "").toLowerCase())}
+            className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm font-mono" dir="ltr"
+            placeholder="icon-name" />
+          {iconName && !/^[a-z][a-z0-9-]*$/.test(iconName) && (
+            <p className="text-xs text-red-500">الاسم غير صالح — يجب أن يبدأ بحرف إنجليزي</p>
+          )}
+        </div>
+        <div className="flex gap-3 mt-5">
+          <button onClick={confirmIconUpload}
+            disabled={!iconName || !/^[a-z][a-z0-9-]*$/.test(iconName)}
+            className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer disabled:opacity-40" style={{ background: P }}>رفع الأيقونة</button>
+          <button onClick={() => { setPendingIcon(null); setIconName(""); }} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
+        </div>
+      </Modal>
 
       <Modal open={showAccount} onClose={() => setShowAccount(false)} title="إضافة حساب جديد" sm>
         <div className="space-y-4">
