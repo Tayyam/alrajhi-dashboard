@@ -17,6 +17,6 @@ const render = (bucket: string, path: string, opts: string) =>
   `${url}/storage/v1/render/image/public/${bucket}/${path}?${opts}`;
 
 export const iconUrl = (name: string) => render("icons", `${name}.png`, "width=64&height=64&resize=contain");
-export const bgUrl = () => render("assets", "background.jpeg", "width=1920&quality=75");
+export const bgUrl = () => render("assets", "background.jpeg", "width=1920&quality=90");
 export const LOGO = "/logorajhi.webp";
 export const BG_KEY = "background.jpeg";
