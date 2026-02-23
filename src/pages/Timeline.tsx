@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import TimelineTrack from "../components/TimelineTrack";
 import TimelineNode, { type NodeStatus } from "../components/TimelineNode";
-import { supabase, assetUrl, LOGO_KEY, BG_KEY, type NodeRow } from "../lib/supabase";
+import { supabase, assetUrl, LOGO, BG_KEY, type NodeRow } from "../lib/supabase";
 
 function getNodeStatus(progress: number, date: string): NodeStatus {
   const past = new Date(date).getTime() <= Date.now();
@@ -128,7 +128,7 @@ export default function Timeline() {
             return (
               <g className="header-fade">
                 <rect x={hx - 155} y={hy - 145} width="310" height="260" rx="16" fill="white" opacity="0.95" filter="url(#fShadow)" />
-                <image href={assetUrl(LOGO_KEY)} x={hx - 130} y={hy - 135} width="260" height="120"
+                <image href={LOGO} x={hx - 130} y={hy - 135} width="260" height="120"
                   className="cursor-pointer" onClick={() => navigate("/login")} />
                 <text x={hx} y={hy + 20} fontSize="26" fontWeight="700" fill="#1E4483" textAnchor="middle">
                   الجدول الزمني لمهام

@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase, assetUrl, LOGO_KEY, BG_KEY } from "../lib/supabase";
+import { supabase, assetUrl, LOGO, BG_KEY } from "../lib/supabase";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -41,7 +41,7 @@ export default function Login() {
       style={{ backgroundImage: `url('${assetUrl(BG_KEY)}')` }}>
       <div className="w-full max-w-md bg-white/95 rounded-2xl shadow-xl p-8 backdrop-blur-sm" dir="rtl">
         <div className="flex justify-center mb-6">
-          <img src={assetUrl(LOGO_KEY)} alt="Logo" className="h-20 object-contain" />
+          <img src={LOGO} alt="Logo" className="h-20 object-contain" />
         </div>
 
         <h1 className="text-2xl font-bold text-center text-[#1E4483] mb-2">تسجيل الدخول</h1>

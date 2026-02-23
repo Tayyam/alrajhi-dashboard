@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase, iconUrl, assetUrl, LOGO_KEY, BG_KEY, type NodeRow } from "../lib/supabase";
+import { supabase, iconUrl, assetUrl, LOGO, BG_KEY, type NodeRow } from "../lib/supabase";
 import * as XLSX from "xlsx";
 
 const P = "#1E4483";
@@ -49,14 +49,12 @@ export default function Dashboard() {
   const [showMenu, setShowMenu] = useState(false);
 
   const [iconList, setIconList] = useState<string[]>([]);
-  const [assetTs, setAssetTs] = useState(Date.now());
   const [pendingIcon, setPendingIcon] = useState<{ file: File; setForm: (fn: (f: typeof emptyForm) => typeof emptyForm) => void; oldIcon?: string } | null>(null);
   const [iconName, setIconName] = useState("");
 
   const fileRef = useRef<HTMLInputElement>(null);
   const editIconRef = useRef<HTMLInputElement>(null);
   const addIconRef = useRef<HTMLInputElement>(null);
-  const logoRef = useRef<HTMLInputElement>(null);
   const bgRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -191,9 +189,9 @@ export default function Dashboard() {
     setSaving(-1);
     const { error } = await supabase.storage.from("assets").upload(key, file, { upsert: true, contentType: file.type });
     if (error) msg("خطأ: " + error.message, "err");
-    else { setAssetTs(Date.now()); msg(`تم تحديث ${label}`, "ok"); }
+    else msg(`تم تحديث ${label}`, "ok");
     setSaving(null);
-    [logoRef, bgRef].forEach((r) => { if (r.current) r.current.value = ""; });
+    if (bgRef.current) bgRef.current.value = "";
   }
 
   async function handleBackup() {
@@ -293,7 +291,7 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="bg-white rounded-lg px-2 py-1 flex items-center cursor-pointer" onClick={() => navigate("/")}>
-              <img src={`${assetUrl(LOGO_KEY)}?t=${assetTs}`} alt="Logo" className="h-9 object-contain" />
+              <img src={LOGO} alt="Logo" className="h-9 object-contain" />
             </div>
             <div className="hidden sm:block">
               <h1 className="text-base font-bold text-white">لوحة التحكم</h1>
@@ -328,8 +326,6 @@ export default function Dashboard() {
                 <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-xl shadow-xl border border-gray-200 py-1 z-50" dir="rtl">
                   <MenuItem icon="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 6l-4-4m0 0L8 6m4-4v13" label="رفع Excel" asLabel
                     input={<input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => { handleImport(e); setShowMenu(false); }} />} />
-                  <MenuItem icon="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" label="تغيير اللوجو" asLabel
-                    input={<input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={(e) => { handleAssetUpload(e, LOGO_KEY, "اللوجو"); setShowMenu(false); }} />} />
                   <MenuItem icon="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" label="تغيير الخلفية" asLabel
                     input={<input ref={bgRef} type="file" accept="image/*" className="hidden" onChange={(e) => { handleAssetUpload(e, BG_KEY, "الخلفية"); setShowMenu(false); }} />} />
                   <hr className="border-gray-100 my-1" />

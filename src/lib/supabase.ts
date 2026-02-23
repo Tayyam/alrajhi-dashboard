@@ -15,5 +15,5 @@ export interface NodeRow {
 
 export const iconUrl = (name: string) => `${url}/storage/v1/object/public/icons/${name}.png`;
 export const assetUrl = (name: string) => `${url}/storage/v1/object/public/assets/${name}`;
-export const LOGO_KEY = "logo.png";
+export const LOGO = "/logorajhi.webp";
 export const BG_KEY = "background.jpeg";
