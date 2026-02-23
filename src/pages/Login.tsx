@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase, assetUrl, LOGO, BG_KEY } from "../lib/supabase";
+import { supabase, bgUrl, LOGO } from "../lib/supabase";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -30,7 +30,7 @@ export default function Login() {
   if (checking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url('${assetUrl(BG_KEY)}')` }}>
+        style={{ backgroundImage: `url('${bgUrl()}')` }}>
         <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -38,7 +38,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat px-4"
-      style={{ backgroundImage: `url('${assetUrl(BG_KEY)}')` }}>
+      style={{ backgroundImage: `url('${bgUrl()}')` }}>
       <div className="w-full max-w-md bg-white/95 rounded-2xl shadow-xl p-8 backdrop-blur-sm" dir="rtl">
         <div className="flex justify-center mb-6">
           <img src={LOGO} alt="Logo" className="h-20 object-contain" />

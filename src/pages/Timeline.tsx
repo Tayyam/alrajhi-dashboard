@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import TimelineTrack from "../components/TimelineTrack";
 import TimelineNode, { type NodeStatus } from "../components/TimelineNode";
-import { supabase, assetUrl, LOGO, BG_KEY, type NodeRow } from "../lib/supabase";
+import { supabase, bgUrl, LOGO, type NodeRow } from "../lib/supabase";
 
 function getNodeStatus(progress: number, date: string): NodeStatus {
   const past = new Date(date).getTime() <= Date.now();
@@ -109,7 +109,7 @@ export default function Timeline() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url('${assetUrl(BG_KEY)}')` }}>
+        style={{ backgroundImage: `url('${bgUrl()}')` }}>
         <div className="text-2xl font-bold text-white animate-pulse">جاري التحميل...</div>
       </div>
     );
@@ -117,7 +117,7 @@ export default function Timeline() {
 
   return (
     <div className="min-h-screen bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: `url('${assetUrl(BG_KEY)}')` }}>
+      style={{ backgroundImage: `url('${bgUrl()}')` }}>
       <div className="w-full max-w-[1990px] mx-auto lg:pr-15 lg:pl-25 pl-5 md:pl-10">
         <svg viewBox="0 0 1600 884" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" direction="ltr">
           <TimelineTrack pathRef={pathRef} />

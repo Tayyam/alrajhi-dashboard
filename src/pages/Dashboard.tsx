@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase, iconUrl, assetUrl, LOGO, BG_KEY, type NodeRow } from "../lib/supabase";
+import { supabase, iconUrl, LOGO, BG_KEY, type NodeRow } from "../lib/supabase";
 import * as XLSX from "xlsx";
 
 const P = "#1E4483";
