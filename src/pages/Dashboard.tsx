@@ -463,6 +463,21 @@ export default function Dashboard() {
     setSaving(null);
   }
 
+  async function handleCopyWorksheetLinks() {
+    if (!worksheets.length) { msg("لا توجد Worksheets لنسخ روابطها", "err"); return; }
+    const base = window.location.origin;
+    const content = worksheets
+      .map((w) => `${worksheetLabelText(w)}: ${base}/${encodeURIComponent(w.slug)}`)
+      .join("\n");
+
+    try {
+      await navigator.clipboard.writeText(content);
+      msg("تم نسخ جميع الروابط", "ok");
+    } catch {
+      msg("تعذر نسخ الروابط. تأكد من صلاحية الحافظة.", "err");
+    }
+  }
+
   async function handleLogout() { await supabase.auth.signOut(); navigate("/login"); }
 
   function formFields(form: typeof emptyForm, setForm: (f: typeof emptyForm) => void, ref: React.RefObject<HTMLInputElement | null>, oldIcon?: string) {
@@ -578,6 +593,8 @@ export default function Dashboard() {
                   <hr className="border-gray-100 my-1" />
                   <MenuItem icon="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 6l-4-4m0 0L8 6m4-4v13" label="رفع Excel"
                     onClick={() => { setShowImportModal(true); setShowMenu(false); }} />
+                  <MenuItem icon="M8 16h8M8 12h8m-8-4h8M4 6h16v12H4z" label="نسخ روابط Worksheets"
+                    onClick={async () => { await handleCopyWorksheetLinks(); setShowMenu(false); }} />
                   <MenuItem icon="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3a2 2 0 002 2h14a2 2 0 002-2v-3" label="تصدير Excel"
                     onClick={() => { handleExport(); setShowMenu(false); }} />
                   <MenuItem icon="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" label="نسخ احتياطي"
