@@ -10,6 +10,7 @@ const emptyForm = { title: "", date: "", icon: "document", progress: 0 };
 const emptyAccount = { email: "", password: "", role: "user" as "admin" | "user" };
 const emptyWorksheetForm = { name: "", label: "", country: "" };
 const emptyWorksheetRenameForm = { name: "", label: "", country: "" };
+const emptyWorksheetDuplicateForm = { name: "", label: "", country: "" };
 const COUNTRY_OPTIONS = ["", "النيجر", "مصر", "باكستان"];
 
 function worksheetLabelText(worksheet?: WorksheetRow | null) {
@@ -79,10 +80,12 @@ export default function Dashboard() {
   const [showAccount, setShowAccount] = useState(false);
   const [showWorksheetCreate, setShowWorksheetCreate] = useState(false);
   const [showWorksheetRename, setShowWorksheetRename] = useState(false);
+  const [showWorksheetDuplicate, setShowWorksheetDuplicate] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [accountForm, setAccountForm] = useState(emptyAccount);
   const [worksheetForm, setWorksheetForm] = useState(emptyWorksheetForm);
   const [worksheetRenameForm, setWorksheetRenameForm] = useState(emptyWorksheetRenameForm);
+  const [worksheetDuplicateForm, setWorksheetDuplicateForm] = useState(emptyWorksheetDuplicateForm);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [showMenu, setShowMenu] = useState(false);
 
@@ -384,6 +387,52 @@ export default function Dashboard() {
     setSaving(null);
   }
 
+  async function handleDuplicateWorksheet() {
+    if (!currentWorksheet) { msg("الـ Worksheet غير محدد", "err"); return; }
+    const name = worksheetDuplicateForm.name.trim();
+    const label = worksheetDuplicateForm.label.trim();
+    if (!name) { msg("يرجى إدخال معرف الرابط", "err"); return; }
+    if (!label) { msg("يرجى إدخال التسمية المعروضة", "err"); return; }
+
+    setSaving(-1);
+    const slug = makeWorksheetSlug(name);
+    const country = worksheetDuplicateForm.country || null;
+
+    const { data: created, error: createErr } = await supabase
+      .from("worksheets")
+      .insert({ name, slug, label, country })
+      .select("id,name,slug,label,country")
+      .single();
+
+    if (createErr || !created) {
+      msg("خطأ: " + (createErr?.message ?? "تعذر إنشاء Worksheet المنسوخ"), "err");
+      setSaving(null);
+      return;
+    }
+
+    const copiedNodes = nodes.map((n) => ({
+      title: n.title,
+      date: n.date,
+      icon: n.icon,
+      progress: n.progress,
+      worksheet_id: created.id,
+    }));
+
+    if (copiedNodes.length > 0) {
+      const { error: copyErr } = await supabase.from("timeline_nodes").insert(copiedNodes);
+      if (copyErr) {
+        msg("تم إنشاء Worksheet لكن فشل نسخ بعض المهام: " + copyErr.message, "err");
+      }
+    }
+
+    msg("تم نسخ Worksheet بنجاح", "ok");
+    setShowWorksheetDuplicate(false);
+    setWorksheetDuplicateForm(emptyWorksheetDuplicateForm);
+    await fetchWorksheets();
+    navigate(`/dashboard/${encodeURIComponent(created.slug)}`);
+    setSaving(null);
+  }
+
   async function handleLogout() { await supabase.auth.signOut(); navigate("/login"); }
 
   function formFields(form: typeof emptyForm, setForm: (f: typeof emptyForm) => void, ref: React.RefObject<HTMLInputElement | null>, oldIcon?: string) {
@@ -453,40 +502,9 @@ export default function Dashboard() {
             >
               {worksheets.map((w) => <option key={w.id} value={w.slug}>{w.country ? `${worksheetLabelText(w)} (${w.country})` : worksheetLabelText(w)}</option>)}
             </select>
-            <button onClick={() => setShowWorksheetCreate(true)} className={`${btn} text-white`} style={{ background: "#274f94" }}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-              <span className="hidden sm:inline">Worksheet جديد</span>
-            </button>
-            <button
-              onClick={() => {
-                setWorksheetRenameForm({
-                  name: currentWorksheet?.name ?? "",
-                  label: currentWorksheet?.label ?? currentWorksheet?.name ?? "",
-                  country: currentWorksheet?.country ?? "",
-                });
-                setShowWorksheetRename(true);
-              }}
-              className={btnOut}
-              style={outStyle}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-              <span className="hidden sm:inline">تعديل الاسم</span>
-            </button>
-            <button onClick={() => navigate(`/${encodeURIComponent(currentWorksheet?.slug ?? DEFAULT_WORKSHEET_SLUG)}`)} className={btnOut} style={outStyle}>
-              <svg className="w-4 h-4 rotate-180" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-              <span className="hidden sm:inline">الصفحة الرئيسية</span>
-            </button>
             <button onClick={() => setShowAdd(true)} className={`${btn} text-white`} style={{ background: S }}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
               <span className="hidden sm:inline">إضافة مهمة</span>
-            </button>
-            <button onClick={handleExport} className={btnOut} style={outStyle}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3a2 2 0 002 2h14a2 2 0 002-2v-3" /></svg>
-              <span className="hidden sm:inline">تصدير Excel</span>
-            </button>
-            <button onClick={handleBackup} className={btnOut} style={outStyle}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" /></svg>
-              <span className="hidden sm:inline">نسخ احتياطي</span>
             </button>
 
             <div className="relative" ref={menuRef}>
@@ -495,9 +513,41 @@ export default function Dashboard() {
                 <span className="hidden sm:inline">المزيد</span>
               </button>
               {showMenu && (
-                <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-xl shadow-xl border border-gray-200 py-1 z-50" dir="rtl">
+                <div className="absolute left-0 top-full mt-1 w-64 bg-white rounded-xl shadow-xl border border-gray-200 py-1 z-50" dir="rtl">
+                  <MenuItem icon="M17 8l4 4m0 0l-4 4m4-4H3" label="الصفحة الرئيسية"
+                    onClick={() => { navigate(`/${encodeURIComponent(currentWorksheet?.slug ?? DEFAULT_WORKSHEET_SLUG)}`); setShowMenu(false); }} />
+                  <hr className="border-gray-100 my-1" />
+                  <MenuItem icon="M12 4v16m8-8H4" label="Worksheet جديد"
+                    onClick={() => { setShowWorksheetCreate(true); setShowMenu(false); }} />
+                  <MenuItem icon="M4 4v5h.582m15.356 2A8.003 8.003 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    label="نسخ Worksheet"
+                    onClick={() => {
+                      setWorksheetDuplicateForm({
+                        name: `${currentWorksheet?.name ?? ""} copy`,
+                        label: `${worksheetLabelText(currentWorksheet)} نسخة`,
+                        country: currentWorksheet?.country ?? "",
+                      });
+                      setShowWorksheetDuplicate(true);
+                      setShowMenu(false);
+                    }} />
+                  <MenuItem icon="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    label="تعديل Worksheet"
+                    onClick={() => {
+                      setWorksheetRenameForm({
+                        name: currentWorksheet?.name ?? "",
+                        label: currentWorksheet?.label ?? currentWorksheet?.name ?? "",
+                        country: currentWorksheet?.country ?? "",
+                      });
+                      setShowWorksheetRename(true);
+                      setShowMenu(false);
+                    }} />
+                  <hr className="border-gray-100 my-1" />
                   <MenuItem icon="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 6l-4-4m0 0L8 6m4-4v13" label="رفع Excel"
                     onClick={() => { setShowImportModal(true); setShowMenu(false); }} />
+                  <MenuItem icon="M12 10v6m0 0l-3-3m3 3l3-3M3 17v3a2 2 0 002 2h14a2 2 0 002-2v-3" label="تصدير Excel"
+                    onClick={() => { handleExport(); setShowMenu(false); }} />
+                  <MenuItem icon="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" label="نسخ احتياطي"
+                    onClick={() => { handleBackup(); setShowMenu(false); }} />
                   <MenuItem icon="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" label="تغيير الخلفية" asLabel
                     input={<input ref={bgRef} type="file" accept="image/*" className="hidden" onChange={(e) => { handleAssetUpload(e, BG_KEY, "الخلفية"); setShowMenu(false); }} />} />
                   <hr className="border-gray-100 my-1" />
@@ -683,6 +733,49 @@ export default function Dashboard() {
         <div className="flex gap-3 mt-6">
           <button onClick={handleRenameWorksheet} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: P }}>حفظ</button>
           <button onClick={() => { setShowWorksheetRename(false); setWorksheetRenameForm(emptyWorksheetRenameForm); }} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
+        </div>
+      </Modal>
+
+      <Modal open={showWorksheetDuplicate} onClose={() => setShowWorksheetDuplicate(false)} title="نسخ Worksheet" sm>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">معرف الرابط الجديد</label>
+            <input
+              type="text"
+              value={worksheetDuplicateForm.name}
+              onChange={(e) => setWorksheetDuplicateForm({ ...worksheetDuplicateForm, name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm"
+              placeholder="أدخل معرف الرابط"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">التسمية المعروضة الجديدة</label>
+            <input
+              type="text"
+              value={worksheetDuplicateForm.label}
+              onChange={(e) => setWorksheetDuplicateForm({ ...worksheetDuplicateForm, label: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm"
+              placeholder="أدخل التسمية المعروضة"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">الدولة (اختياري)</label>
+            <select
+              value={worksheetDuplicateForm.country}
+              onChange={(e) => setWorksheetDuplicateForm({ ...worksheetDuplicateForm, country: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm"
+            >
+              <option value="">بدون دولة</option>
+              {COUNTRY_OPTIONS.filter(Boolean).map((country) => <option key={country} value={country}>{country}</option>)}
+            </select>
+          </div>
+          <p className="text-xs text-gray-500">
+            سيتم نسخ جميع المهام الحالية إلى Worksheet جديد بالبيانات التي تحددها.
+          </p>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <button onClick={handleDuplicateWorksheet} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: P }}>نسخ</button>
+          <button onClick={() => { setShowWorksheetDuplicate(false); setWorksheetDuplicateForm(emptyWorksheetDuplicateForm); }} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
         </div>
       </Modal>
 
