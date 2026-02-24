@@ -11,6 +11,15 @@ export interface NodeRow {
   date: string;
   icon: string;
   progress: number;
+  worksheet_id: string;
+}
+
+export interface WorksheetRow {
+  id: string;
+  name: string;
+  slug: string;
+  label?: string | null;
+  country?: string | null;
 }
 
 const render = (bucket: string, path: string, opts: string) =>

@@ -1,12 +1,21 @@
 import { useState, useEffect, useRef, type ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import { supabase, iconUrl, LOGO, BG_KEY, type NodeRow } from "../lib/supabase";
+import { useNavigate, useParams } from "react-router-dom";
+import { supabase, iconUrl, LOGO, BG_KEY, type NodeRow, type WorksheetRow } from "../lib/supabase";
 import * as XLSX from "xlsx";
+import { decodeWorksheetSlug, DEFAULT_WORKSHEET_SLUG, makeWorksheetSlug } from "../lib/worksheets";
 
 const P = "#1E4483";
 const S = "#B99A57";
 const emptyForm = { title: "", date: "", icon: "document", progress: 0 };
 const emptyAccount = { email: "", password: "", role: "user" as "admin" | "user" };
+const emptyWorksheetForm = { name: "", label: "", country: "" };
+const emptyWorksheetRenameForm = { name: "", label: "", country: "" };
+const COUNTRY_OPTIONS = ["", "النيجر", "مصر", "باكستان"];
+
+function worksheetLabelText(worksheet?: WorksheetRow | null) {
+  if (!worksheet) return "";
+  return worksheet.label?.trim() || worksheet.name;
+}
 
 function formatDateAr(dateStr: string) {
   const d = new Date(dateStr);
@@ -31,9 +40,32 @@ function statusBadge(progress: number, date: string) {
   return <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">قادم</span>;
 }
 
+function toIsoDate(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (!parsed) return "";
+    const yyyy = String(parsed.y).padStart(4, "0");
+    const mm = String(parsed.m).padStart(2, "0");
+    const dd = String(parsed.d).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  const asText = String(value ?? "").trim();
+  if (!asText) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(asText)) return asText;
+
+  const d = new Date(asText);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { worksheetSlug } = useParams();
+  const resolvedSlug = decodeWorksheetSlug(worksheetSlug || DEFAULT_WORKSHEET_SLUG);
   const [nodes, setNodes] = useState<NodeRow[]>([]);
+  const [worksheets, setWorksheets] = useState<WorksheetRow[]>([]);
+  const [currentWorksheet, setCurrentWorksheet] = useState<WorksheetRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
@@ -45,14 +77,19 @@ export default function Dashboard() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
+  const [showWorksheetCreate, setShowWorksheetCreate] = useState(false);
+  const [showWorksheetRename, setShowWorksheetRename] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [accountForm, setAccountForm] = useState(emptyAccount);
+  const [worksheetForm, setWorksheetForm] = useState(emptyWorksheetForm);
+  const [worksheetRenameForm, setWorksheetRenameForm] = useState(emptyWorksheetRenameForm);
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [showMenu, setShowMenu] = useState(false);
 
   const [iconList, setIconList] = useState<string[]>([]);
   const [pendingIcon, setPendingIcon] = useState<{ file: File; setForm: (fn: (f: typeof emptyForm) => typeof emptyForm) => void; oldIcon?: string } | null>(null);
   const [iconName, setIconName] = useState("");
 
-  const fileRef = useRef<HTMLInputElement>(null);
   const editIconRef = useRef<HTMLInputElement>(null);
   const addIconRef = useRef<HTMLInputElement>(null);
   const bgRef = useRef<HTMLInputElement>(null);
@@ -60,24 +97,29 @@ export default function Dashboard() {
 
   useEffect(() => {
     checkAuth();
-    fetchNodes();
+    fetchWorksheets();
     fetchIcons();
+  }, [resolvedSlug]);
+
+  useEffect(() => {
+    if (!currentWorksheet?.id) return;
+    fetchNodes(currentWorksheet.id);
 
     const ch = supabase
-      .channel("dashboard-rt")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "timeline_nodes" }, ({ new: n }) => {
+      .channel(`dashboard-rt-${currentWorksheet.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "timeline_nodes", filter: `worksheet_id=eq.${currentWorksheet.id}` }, ({ new: n }) => {
         setNodes((prev) => prev.some((x) => x.id === (n as NodeRow).id) ? prev : [...prev, n as NodeRow].sort((a, b) => a.date.localeCompare(b.date)));
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "timeline_nodes" }, ({ new: n }) => {
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "timeline_nodes", filter: `worksheet_id=eq.${currentWorksheet.id}` }, ({ new: n }) => {
         setNodes((prev) => prev.map((x) => x.id === (n as NodeRow).id ? (n as NodeRow) : x));
       })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "timeline_nodes" }, ({ old: o }) => {
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "timeline_nodes", filter: `worksheet_id=eq.${currentWorksheet.id}` }, ({ old: o }) => {
         setNodes((prev) => prev.filter((x) => x.id !== (o as NodeRow).id));
       })
       .subscribe();
 
     return () => { supabase.removeChannel(ch); };
-  }, []);
+  }, [currentWorksheet?.id]);
 
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 3000); return () => clearTimeout(t); }, [toast]);
 
@@ -93,10 +135,27 @@ export default function Dashboard() {
     if (!data.session) navigate("/login", { replace: true });
   }
 
-  async function fetchNodes() {
+  async function fetchWorksheets() {
+    const { data, error } = await supabase.from("worksheets").select("id,name,slug,label,country").order("created_at", { ascending: true });
+    if (error) {
+      msg(error.message, "err");
+      setLoading(false);
+      return;
+    }
+    const list = (data ?? []) as WorksheetRow[];
+    setWorksheets(list);
+    const selected = list.find((w) => w.slug === resolvedSlug) ?? list.find((w) => w.slug === DEFAULT_WORKSHEET_SLUG) ?? list[0] ?? null;
+    setCurrentWorksheet(selected);
+    if (selected && selected.slug !== resolvedSlug) {
+      navigate(`/dashboard/${encodeURIComponent(selected.slug)}`, { replace: true });
+    }
+    if (!selected) setLoading(false);
+  }
+
+  async function fetchNodes(worksheetId: string) {
     setLoading(true);
-    const { data, error } = await supabase.from("timeline_nodes").select("*").order("date", { ascending: true });
-    if (error) msg(error.message, "err"); else if (data) setNodes(data);
+    const { data, error } = await supabase.from("timeline_nodes").select("*").eq("worksheet_id", worksheetId).order("date", { ascending: true });
+    if (error) msg(error.message, "err"); else if (data) setNodes(data as NodeRow[]);
     setLoading(false);
   }
 
@@ -134,11 +193,12 @@ export default function Dashboard() {
   }
 
   async function handleAdd() {
+    if (!currentWorksheet) { msg("الـ Worksheet غير محدد", "err"); return; }
     if (!addForm.title || !addForm.date) { msg("يرجى ملء العنوان والتاريخ", "err"); return; }
     setSaving(-1);
-    const { error } = await supabase.from("timeline_nodes").insert(addForm);
+    const { error } = await supabase.from("timeline_nodes").insert({ ...addForm, worksheet_id: currentWorksheet.id });
     if (error) msg("خطأ: " + error.message, "err");
-    else { msg("تمت الإضافة", "ok"); setShowAdd(false); setAddForm(emptyForm); await fetchNodes(); }
+    else { msg("تمت الإضافة", "ok"); setShowAdd(false); setAddForm(emptyForm); await fetchNodes(currentWorksheet.id); }
     setSaving(null);
   }
 
@@ -162,8 +222,9 @@ export default function Dashboard() {
   }
 
   async function handleDeleteAll() {
+    if (!currentWorksheet) { msg("الـ Worksheet غير محدد", "err"); return; }
     setSaving(-1);
-    const { error } = await supabase.from("timeline_nodes").delete().gte("id", 0);
+    const { error } = await supabase.from("timeline_nodes").delete().eq("worksheet_id", currentWorksheet.id);
     if (error) msg("خطأ: " + error.message, "err");
     else { setNodes([]); msg("تم حذف جميع المهام", "ok"); }
     setShowDeleteAll(false); setSaving(null);
@@ -209,9 +270,24 @@ export default function Dashboard() {
     msg("تم تصدير الملف", "ok");
   }
 
-  async function handleImport(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  function handleDownloadImportTemplate() {
+    const rows = [
+      {
+        "العنوان": "",
+        "التاريخ": "",
+        "الأيقونة": "document",
+        "نسبة الإكتمال (%)": 0,
+      },
+    ];
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 45 }, { wch: 16 }, { wch: 16 }, { wch: 18 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+    XLSX.writeFile(wb, "timeline_import_template.xlsx");
+  }
+
+  async function handleImport(file: File) {
+    if (!currentWorksheet) { msg("الـ Worksheet غير محدد", "err"); return; }
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
@@ -219,23 +295,93 @@ export default function Dashboard() {
         const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]]);
         if (!rows.length) { msg("الملف فارغ", "err"); return; }
         setSaving(-1);
-        let u = 0, ins = 0;
+        let u = 0, ins = 0, fail = 0;
         for (const row of rows) {
           const title = String(row["العنوان"] ?? row["title"] ?? "");
-          const date = String(row["التاريخ"] ?? row["date"] ?? "");
+          const date = toIsoDate(row["التاريخ"] ?? row["date"]);
           const icon = String(row["الأيقونة"] ?? row["icon"] ?? "document");
           const progress = Math.max(0, Math.min(100, Number(row["نسبة الإكتمال (%)"] ?? row["progress"] ?? 0)));
-          if (!title || !date) continue;
+          if (!title || !date) { fail++; continue; }
           const ex = nodes.find((n) => n.title === title);
-          if (ex) { await supabase.from("timeline_nodes").update({ title, date, icon, progress }).eq("id", ex.id); u++; }
-          else { await supabase.from("timeline_nodes").insert({ title, date, icon, progress }); ins++; }
+          if (ex) {
+            const { error } = await supabase.from("timeline_nodes").update({ title, date, icon, progress }).eq("id", ex.id);
+            if (error) fail++; else u++;
+          } else {
+            const { error } = await supabase.from("timeline_nodes").insert({ title, date, icon, progress, worksheet_id: currentWorksheet.id });
+            if (error) fail++; else ins++;
+          }
         }
-        await fetchNodes();
-        msg(`تم: ${u} تحديث، ${ins} إضافة`, "ok");
+        await fetchNodes(currentWorksheet.id);
+        if (u === 0 && ins === 0) {
+          msg("لم يتم استيراد أي صف. تأكد من الأعمدة وصيغة التاريخ (YYYY-MM-DD).", "err");
+        } else if (fail > 0) {
+          msg(`تم: ${u} تحديث، ${ins} إضافة، ${fail} صف فشل`, "ok");
+        } else {
+          msg(`تم: ${u} تحديث، ${ins} إضافة`, "ok");
+        }
+        setShowImportModal(false);
+        setImportFile(null);
       } catch { msg("خطأ في قراءة الملف", "err"); }
-      finally { setSaving(null); if (fileRef.current) fileRef.current.value = ""; }
+      finally { setSaving(null); }
     };
     reader.readAsArrayBuffer(file);
+  }
+
+  async function handleCreateWorksheet() {
+    const name = worksheetForm.name.trim();
+    const label = worksheetForm.label.trim();
+    if (!name) { msg("يرجى إدخال معرف الرابط", "err"); return; }
+    if (!label) { msg("يرجى إدخال التسمية المعروضة", "err"); return; }
+    setSaving(-1);
+    const slug = makeWorksheetSlug(name);
+    const country = worksheetForm.country || null;
+    const { data, error } = await supabase
+      .from("worksheets")
+      .insert({ name, slug, label, country })
+      .select("id,name,slug,label,country")
+      .single();
+    if (error || !data) {
+      msg("خطأ: " + (error?.message ?? "تعذر إنشاء Worksheet"), "err");
+      setSaving(null);
+      return;
+    }
+    msg("تم إنشاء Worksheet جديد", "ok");
+    setShowWorksheetCreate(false);
+    setWorksheetForm(emptyWorksheetForm);
+    await fetchWorksheets();
+    navigate(`/dashboard/${encodeURIComponent(data.slug)}`);
+    setSaving(null);
+  }
+
+  async function handleRenameWorksheet() {
+    if (!currentWorksheet) { msg("الـ Worksheet غير محدد", "err"); return; }
+    const name = worksheetRenameForm.name.trim();
+    const label = worksheetRenameForm.label.trim();
+    if (!name) { msg("يرجى إدخال معرف الرابط", "err"); return; }
+    if (!label) { msg("يرجى إدخال التسمية المعروضة", "err"); return; }
+
+    setSaving(-1);
+    const slug = makeWorksheetSlug(name);
+    const country = worksheetRenameForm.country || null;
+    const { data, error } = await supabase
+      .from("worksheets")
+      .update({ name, slug, label, country })
+      .eq("id", currentWorksheet.id)
+      .select("id,name,slug,label,country")
+      .single();
+
+    if (error || !data) {
+      msg("خطأ: " + (error?.message ?? "تعذر تعديل Worksheet"), "err");
+      setSaving(null);
+      return;
+    }
+
+    msg("تم تعديل اسم Worksheet", "ok");
+    setShowWorksheetRename(false);
+    setWorksheetRenameForm(emptyWorksheetRenameForm);
+    await fetchWorksheets();
+    navigate(`/dashboard/${encodeURIComponent(data.slug)}`);
+    setSaving(null);
   }
 
   async function handleLogout() { await supabase.auth.signOut(); navigate("/login"); }
@@ -290,17 +436,43 @@ export default function Dashboard() {
       <header className="sticky top-0 z-30 border-b border-gray-200" style={{ background: P }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="bg-white rounded-lg px-2 py-1 flex items-center cursor-pointer" onClick={() => navigate("/")}>
+            <div className="bg-white rounded-lg px-2 py-1 flex items-center cursor-pointer" onClick={() => navigate(`/${encodeURIComponent(currentWorksheet?.slug ?? DEFAULT_WORKSHEET_SLUG)}`)}>
               <img src={LOGO} alt="Logo" className="h-9 object-contain" />
             </div>
             <div className="hidden sm:block">
               <h1 className="text-base font-bold text-white">لوحة التحكم</h1>
-              <p className="text-xs text-white/60">إدارة الجدول الزمني</p>
+              <p className="text-xs text-white/60">{currentWorksheet ? `إدارة: ${worksheetLabelText(currentWorksheet)}` : "إدارة الجدول الزمني"}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <button onClick={() => navigate("/")} className={btnOut} style={outStyle}>
+            <select
+              value={currentWorksheet?.slug ?? ""}
+              onChange={(e) => navigate(`/dashboard/${encodeURIComponent(e.target.value)}`)}
+              className="px-3 py-2 rounded-lg text-sm font-semibold bg-white text-[#1E4483] outline-none border border-white/30 min-w-52"
+            >
+              {worksheets.map((w) => <option key={w.id} value={w.slug}>{w.country ? `${worksheetLabelText(w)} (${w.country})` : worksheetLabelText(w)}</option>)}
+            </select>
+            <button onClick={() => setShowWorksheetCreate(true)} className={`${btn} text-white`} style={{ background: "#274f94" }}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+              <span className="hidden sm:inline">Worksheet جديد</span>
+            </button>
+            <button
+              onClick={() => {
+                setWorksheetRenameForm({
+                  name: currentWorksheet?.name ?? "",
+                  label: currentWorksheet?.label ?? currentWorksheet?.name ?? "",
+                  country: currentWorksheet?.country ?? "",
+                });
+                setShowWorksheetRename(true);
+              }}
+              className={btnOut}
+              style={outStyle}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+              <span className="hidden sm:inline">تعديل الاسم</span>
+            </button>
+            <button onClick={() => navigate(`/${encodeURIComponent(currentWorksheet?.slug ?? DEFAULT_WORKSHEET_SLUG)}`)} className={btnOut} style={outStyle}>
               <svg className="w-4 h-4 rotate-180" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
               <span className="hidden sm:inline">الصفحة الرئيسية</span>
             </button>
@@ -324,8 +496,8 @@ export default function Dashboard() {
               </button>
               {showMenu && (
                 <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-xl shadow-xl border border-gray-200 py-1 z-50" dir="rtl">
-                  <MenuItem icon="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 6l-4-4m0 0L8 6m4-4v13" label="رفع Excel" asLabel
-                    input={<input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => { handleImport(e); setShowMenu(false); }} />} />
+                  <MenuItem icon="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 6l-4-4m0 0L8 6m4-4v13" label="رفع Excel"
+                    onClick={() => { setShowImportModal(true); setShowMenu(false); }} />
                   <MenuItem icon="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" label="تغيير الخلفية" asLabel
                     input={<input ref={bgRef} type="file" accept="image/*" className="hidden" onChange={(e) => { handleAssetUpload(e, BG_KEY, "الخلفية"); setShowMenu(false); }} />} />
                   <hr className="border-gray-100 my-1" />
@@ -425,6 +597,129 @@ export default function Dashboard() {
         <div className="flex gap-3 mt-6">
           <button onClick={handleAddAccount} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: P }}>إنشاء الحساب</button>
           <button onClick={() => { setShowAccount(false); setAccountForm(emptyAccount); }} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
+        </div>
+      </Modal>
+
+      <Modal open={showWorksheetCreate} onClose={() => setShowWorksheetCreate(false)} title="إنشاء Worksheet جديد" sm>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">معرف الرابط</label>
+            <input
+              type="text"
+              value={worksheetForm.name}
+              onChange={(e) => setWorksheetForm({ ...worksheetForm, name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm"
+              placeholder="مثال: Pilgrimage Affairs 2027"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">التسمية المعروضة</label>
+            <input
+              type="text"
+              value={worksheetForm.label}
+              onChange={(e) => setWorksheetForm({ ...worksheetForm, label: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm"
+              placeholder="مثال: مكاتب شؤون الحج"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">الدولة (اختياري)</label>
+            <select
+              value={worksheetForm.country}
+              onChange={(e) => setWorksheetForm({ ...worksheetForm, country: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm"
+            >
+              <option value="">بدون دولة</option>
+              {COUNTRY_OPTIONS.filter(Boolean).map((country) => <option key={country} value={country}>{country}</option>)}
+            </select>
+          </div>
+          <p className="text-xs text-gray-500">
+            المعرف يستخدم للرابط، والتسمية المعروضة تظهر داخل الصفحة.
+          </p>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <button onClick={handleCreateWorksheet} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: P }}>إنشاء</button>
+          <button onClick={() => { setShowWorksheetCreate(false); setWorksheetForm(emptyWorksheetForm); }} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
+        </div>
+      </Modal>
+
+      <Modal open={showWorksheetRename} onClose={() => setShowWorksheetRename(false)} title="تعديل اسم Worksheet" sm>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">معرف الرابط</label>
+            <input
+              type="text"
+              value={worksheetRenameForm.name}
+              onChange={(e) => setWorksheetRenameForm({ ...worksheetRenameForm, name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm"
+              placeholder="أدخل معرف الرابط"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">التسمية المعروضة</label>
+            <input
+              type="text"
+              value={worksheetRenameForm.label}
+              onChange={(e) => setWorksheetRenameForm({ ...worksheetRenameForm, label: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm"
+              placeholder="أدخل التسمية المعروضة"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">الدولة (اختياري)</label>
+            <select
+              value={worksheetRenameForm.country}
+              onChange={(e) => setWorksheetRenameForm({ ...worksheetRenameForm, country: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm"
+            >
+              <option value="">بدون دولة</option>
+              {COUNTRY_OPTIONS.filter(Boolean).map((country) => <option key={country} value={country}>{country}</option>)}
+            </select>
+          </div>
+          <p className="text-xs text-gray-500">
+            يمكنك تغيير الرابط والتسمية المعروضة بشكل مستقل.
+          </p>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <button onClick={handleRenameWorksheet} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: P }}>حفظ</button>
+          <button onClick={() => { setShowWorksheetRename(false); setWorksheetRenameForm(emptyWorksheetRenameForm); }} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
+        </div>
+      </Modal>
+
+      <Modal open={showImportModal} onClose={() => { setShowImportModal(false); setImportFile(null); }} title="رفع ملف Excel" sm>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
+            ارفع ملف Excel بصيغة الأعمدة المعتمدة، أو قم بتنزيل قالب جاهز.
+          </p>
+          <label className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold cursor-pointer hover:bg-gray-200 transition">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 6l-4-4m0 0L8 6m4-4v13" /></svg>
+            اختيار ملف Excel
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+            />
+          </label>
+          <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
+            {importFile ? `الملف المختار: ${importFile.name}` : "لم يتم اختيار أي ملف بعد"}
+          </div>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={() => handleDownloadImportTemplate()}
+            className="flex-1 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-bold text-sm hover:bg-gray-50 cursor-pointer"
+          >
+            تنزيل Template
+          </button>
+          <button
+            onClick={() => { if (importFile) handleImport(importFile); }}
+            disabled={!importFile}
+            className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer disabled:opacity-40"
+            style={{ background: P }}
+          >
+            رفع الملف
+          </button>
         </div>
       </Modal>
 
