@@ -81,6 +81,7 @@ export default function Dashboard() {
   const [showWorksheetCreate, setShowWorksheetCreate] = useState(false);
   const [showWorksheetRename, setShowWorksheetRename] = useState(false);
   const [showWorksheetDuplicate, setShowWorksheetDuplicate] = useState(false);
+  const [showWorksheetDelete, setShowWorksheetDelete] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [accountForm, setAccountForm] = useState(emptyAccount);
   const [worksheetForm, setWorksheetForm] = useState(emptyWorksheetForm);
@@ -433,6 +434,35 @@ export default function Dashboard() {
     setSaving(null);
   }
 
+  async function handleDeleteWorksheet() {
+    if (!currentWorksheet) { msg("الـ Worksheet غير محدد", "err"); return; }
+    if (worksheets.length <= 1) {
+      msg("لا يمكن حذف آخر Worksheet", "err");
+      setShowWorksheetDelete(false);
+      return;
+    }
+
+    setSaving(-1);
+    const { error } = await supabase.from("worksheets").delete().eq("id", currentWorksheet.id);
+    if (error) {
+      msg("خطأ: " + error.message, "err");
+      setSaving(null);
+      return;
+    }
+
+    const remaining = worksheets.filter((w) => w.id !== currentWorksheet.id);
+    const next = remaining[0];
+    setWorksheets(remaining);
+    setCurrentWorksheet(next ?? null);
+    setShowWorksheetDelete(false);
+
+    if (next) {
+      navigate(`/dashboard/${encodeURIComponent(next.slug)}`, { replace: true });
+    }
+    msg("تم حذف Worksheet", "ok");
+    setSaving(null);
+  }
+
   async function handleLogout() { await supabase.auth.signOut(); navigate("/login"); }
 
   function formFields(form: typeof emptyForm, setForm: (f: typeof emptyForm) => void, ref: React.RefObject<HTMLInputElement | null>, oldIcon?: string) {
@@ -541,6 +571,10 @@ export default function Dashboard() {
                       setShowWorksheetRename(true);
                       setShowMenu(false);
                     }} />
+                  <MenuItem icon="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    label="حذف Worksheet"
+                    danger
+                    onClick={() => { setShowWorksheetDelete(true); setShowMenu(false); }} />
                   <hr className="border-gray-100 my-1" />
                   <MenuItem icon="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 6l-4-4m0 0L8 6m4-4v13" label="رفع Excel"
                     onClick={() => { setShowImportModal(true); setShowMenu(false); }} />
@@ -598,6 +632,15 @@ export default function Dashboard() {
 
       <ConfirmModal open={showDeleteAll} onClose={() => setShowDeleteAll(false)} onConfirm={handleDeleteAll}
         title="حذف جميع المهام" desc={`سيتم حذف جميع المهام (${nodes.length}) نهائياً. ننصح بأخذ نسخة احتياطية أولاً.`} confirmLabel="حذف الكل" />
+
+      <ConfirmModal
+        open={showWorksheetDelete}
+        onClose={() => setShowWorksheetDelete(false)}
+        onConfirm={handleDeleteWorksheet}
+        title="حذف Worksheet"
+        desc={`سيتم حذف "${worksheetLabelText(currentWorksheet)}" مع جميع المهام التابعة له نهائياً.`}
+        confirmLabel="حذف Worksheet"
+      />
 
       <Modal open={!!pendingIcon} onClose={() => { setPendingIcon(null); setIconName(""); }} title="تسمية الأيقونة" sm>
         <div className="space-y-3">
