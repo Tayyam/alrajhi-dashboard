@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type ChangeEvent } from "react";
 import { Helmet } from "react-helmet";
 import { useNavigate, useParams } from "react-router-dom";
-import { supabase, iconUrl, BG_KEY, getCompanyBrand, type NodeRow, type WorksheetRow } from "../lib/supabase";
+import { supabase, iconUrl, BG_KEY, getCompanyBrand, progressFromTasks, worksheetLabel, type NodeRow, type WorksheetRow } from "../lib/supabase";
 import * as XLSX from "xlsx";
 import { decodeWorksheetSlug, DEFAULT_WORKSHEET_SLUG, makeWorksheetSlug } from "../lib/worksheets";
 
@@ -13,27 +13,14 @@ const emptyWorksheetRenameForm = { name: "", label: "", country: "" };
 const emptyWorksheetDuplicateForm = { name: "", label: "", country: "" };
 const COUNTRY_OPTIONS = ["", "النيجر", "مصر", "باكستان"];
 
-function worksheetLabelText(worksheet?: WorksheetRow | null) {
-  if (!worksheet) return "";
-  return worksheet.label?.trim() || worksheet.name;
-}
-
 function formatDateAr(dateStr: string) {
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString("ar-SA-u-nu-latn", { calendar: "islamic-umalqura", day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function computeNodeProgress(node: NodeRow, company: string) {
-  if (company !== "saudia") return node.progress;
-  const total = node.tasks?.length ?? 0;
-  if (!total) return 0;
-  const done = node.tasks?.filter((t) => t.is_done).length ?? 0;
-  return Math.round((done / total) * 100);
-}
-
 function buildWorkbook(nodes: NodeRow[], company: string) {
-  const rows = nodes.map((n) => ({ "العنوان": n.title, "التاريخ": n.date, "الأيقونة": n.icon, "نسبة الإكتمال (%)": computeNodeProgress(n, company) }));
+  const rows = nodes.map((n) => ({ "العنوان": n.title, "التاريخ": n.date, "الأيقونة": n.icon, "نسبة الإكتمال (%)": company === "saudia" ? progressFromTasks(n) : n.progress }));
   const ws = XLSX.utils.json_to_sheet(rows);
   ws["!cols"] = [{ wch: 45 }, { wch: 14 }, { wch: 16 }, { wch: 18 }];
   const wb = XLSX.utils.book_new();
@@ -768,7 +755,7 @@ export default function Dashboard() {
     if (!worksheets.length) { msg("لا توجد Worksheets لنسخ روابطها", "err"); return; }
     const base = window.location.origin;
     const content = worksheets
-      .map((w) => `${worksheetLabelText(w)}: ${base}/${currentCompany}/${encodeURIComponent(w.slug)}`)
+      .map((w) => `${worksheetLabel(w)}: ${base}/${currentCompany}/${encodeURIComponent(w.slug)}`)
       .join("\n");
 
     try {
@@ -849,7 +836,7 @@ export default function Dashboard() {
             </div>
             <div className="hidden sm:block">
               <h1 className="text-base font-bold text-white">لوحة التحكم</h1>
-              <p className="text-xs text-white/60">{currentWorksheet ? `إدارة: ${worksheetLabelText(currentWorksheet)}` : "إدارة الجدول الزمني"}</p>
+              <p className="text-xs text-white/60">{currentWorksheet ? `إدارة: ${worksheetLabel(currentWorksheet)}` : "إدارة الجدول الزمني"}</p>
             </div>
           </div>
 
@@ -859,7 +846,7 @@ export default function Dashboard() {
               onChange={(e) => navigate(`/${currentCompany}/dashboard/${encodeURIComponent(e.target.value)}`)}
               className="px-3 py-2 rounded-lg text-sm font-semibold bg-white text-[#1E4483] outline-none border border-white/30 min-w-52"
             >
-              {worksheets.map((w) => <option key={w.id} value={w.slug}>{w.country ? `${worksheetLabelText(w)} (${w.country})` : worksheetLabelText(w)}</option>)}
+              {worksheets.map((w) => <option key={w.id} value={w.slug}>{w.country ? `${worksheetLabel(w)} (${w.country})` : worksheetLabel(w)}</option>)}
             </select>
             <button onClick={() => setShowAdd(true)} className={`${btn} text-white`} style={{ background: themeS }}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
@@ -895,7 +882,7 @@ export default function Dashboard() {
                     onClick={() => {
                       setWorksheetDuplicateForm({
                         name: `${currentWorksheet?.name ?? ""} copy`,
-                        label: `${worksheetLabelText(currentWorksheet)} نسخة`,
+                        label: `${worksheetLabel(currentWorksheet)} نسخة`,
                         country: currentWorksheet?.country ?? "",
                       });
                       setShowWorksheetDuplicate(true);
@@ -997,7 +984,7 @@ export default function Dashboard() {
         onClose={() => setShowWorksheetDelete(false)}
         onConfirm={handleDeleteWorksheet}
         title="حذف Worksheet"
-        desc={`سيتم حذف "${worksheetLabelText(currentWorksheet)}" مع جميع المهام التابعة له نهائياً.`}
+        desc={`سيتم حذف "${worksheetLabel(currentWorksheet)}" مع جميع المهام التابعة له نهائياً.`}
         confirmLabel="حذف Worksheet"
       />
 
@@ -1242,7 +1229,7 @@ export default function Dashboard() {
                 </thead>
                 <tbody>
                   {nodes.map((node, idx) => {
-                    const nodeProgress = computeNodeProgress(node, currentCompany);
+                    const nodeProgress = currentCompany === "saudia" ? progressFromTasks(node) : node.progress;
                     return (
                     <tr key={node.id} className={`border-b border-gray-100 hover:bg-gray-50/50 transition ${saving === node.id ? "opacity-50" : ""}`}>
                       <td className="px-4 py-3 whitespace-nowrap"><span className="text-gray-400 font-mono text-xs">{idx + 1}</span></td>

@@ -5,12 +5,13 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5c
 
 export const supabase = createClient(url, key);
 
+// ─── Interfaces ──────────────────────────────────────────────────────────────
+
 export interface TaskRow {
   id: number;
   node_id: number;
   title: string;
   is_done: boolean;
-  progress?: number;
   icon?: string | null;
 }
 
@@ -34,33 +35,45 @@ export interface WorksheetRow {
   show_subtasks?: boolean;
 }
 
-const render = (bucket: string, path: string, opts: string) =>
-  `${url}/storage/v1/render/image/public/${bucket}/${path}?${opts}`;
-
-export const iconUrl = (name?: string | null) =>
-  render("icons", `${(name || "document").trim() || "document"}.png`, "width=64&height=64&resize=contain");
-export const bgUrl = () => render("assets", "background.jpeg", "width=1920&quality=90");
-export const LOGO = "/logorajhi.webp";
-export const BG_KEY = "background.jpeg";
-
 export interface CompanyBrand {
   primary: string;
   secondary: string;
   logo: string;
 }
 
+// ─── URLs ─────────────────────────────────────────────────────────────────────
+
+const render = (bucket: string, path: string, opts: string) =>
+  `${url}/storage/v1/render/image/public/${bucket}/${path}?${opts}`;
+
+export const iconUrl = (name?: string | null) =>
+  render("icons", `${(name || "document").trim() || "document"}.png`, "width=64&height=64&resize=contain");
+
+export const bgUrl = () => render("assets", "background.jpeg", "width=1920&quality=90");
+
+export const LOGO    = "/logorajhi.webp";
+export const BG_KEY  = "background.jpeg";
+
+// ─── Brand ───────────────────────────────────────────────────────────────────
+
 export function getCompanyBrand(company?: string): CompanyBrand {
   if (company === "saudia") {
-    return {
-      primary: "#046A38",
-      secondary: "#FFFEFF",
-      logo: "/logosaudia.jpg",
-    };
+    return { primary: "#046A38", secondary: "#FFFEFF", logo: "/logosaudia.jpg" };
   }
+  return { primary: "#1E4483", secondary: "#B99A57", logo: LOGO };
+}
 
-  return {
-    primary: "#1E4483",
-    secondary: "#B99A57",
-    logo: LOGO,
-  };
+// ─── Shared utilities ─────────────────────────────────────────────────────────
+
+/** Progress percentage derived from sub-tasks (for Saudia nodes). */
+export function progressFromTasks(node: NodeRow): number {
+  const total = node.tasks?.length ?? 0;
+  if (!total) return 0;
+  const done = node.tasks?.filter((t) => t.is_done).length ?? 0;
+  return Math.round((done / total) * 100);
+}
+
+/** Display label for a worksheet (label takes priority over name). */
+export function worksheetLabel(worksheet?: WorksheetRow | null): string {
+  return worksheet?.label?.trim() || worksheet?.name || "";
 }

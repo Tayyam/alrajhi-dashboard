@@ -1,20 +1,19 @@
 import { type RefObject } from "react";
 
 // ─── Track geometry constants ───────────────────────────────────────────────
-const START_X   = 560;
-const RIGHT_X   = 1370;
-const LEFT_X    = 130;
-const START_Y   = 245;
-const SPACING   = 260;   // = arc diameter (radius 130)
-const MIN_ROWS  = 3;
-const NODES_PER_EXTRA_ROW = 30;
-const BASE_NODE_THRESHOLD = 30;
+const START_X  = 560;
+const RIGHT_X  = 1370;
+const LEFT_X   = 130;
+const START_Y  = 245;
+const SPACING  = 260;  // arc diameter (radius 130)
+const MIN_ROWS = 3;
+const EXTRA_ROW_THRESHOLD = 30;  // add a row for every 30 items beyond this
 
 // ─── Exported utilities (used by Timeline.tsx for dynamic viewBox) ───────────
 
 export function getTrackRowCount(nodeCount: number): number {
-  if (nodeCount <= BASE_NODE_THRESHOLD) return MIN_ROWS;
-  return MIN_ROWS + Math.ceil((nodeCount - BASE_NODE_THRESHOLD) / NODES_PER_EXTRA_ROW);
+  if (nodeCount <= EXTRA_ROW_THRESHOLD) return MIN_ROWS;
+  return MIN_ROWS + Math.ceil((nodeCount - EXTRA_ROW_THRESHOLD) / EXTRA_ROW_THRESHOLD);
 }
 
 export function getTrackViewBoxHeight(nodeCount: number): number {
