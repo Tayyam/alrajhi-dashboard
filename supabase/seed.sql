@@ -72,15 +72,19 @@ create trigger on_auth_user_created
 create table if not exists public.worksheets (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  slug text not null unique,
+  slug text not null,
   label text,
   country text,
+  company text not null default 'alrajhi',
   created_at timestamptz not null default now()
 );
 
 alter table public.worksheets enable row level security;
 alter table public.worksheets add column if not exists label text;
 alter table public.worksheets add column if not exists country text;
+alter table public.worksheets add column if not exists company text not null default 'alrajhi';
+drop index if exists worksheets_slug_key;
+create unique index if not exists worksheets_company_slug_key on public.worksheets (company, slug);
 
 drop policy if exists "Anyone can read worksheets" on public.worksheets;
 create policy "Anyone can read worksheets"
@@ -98,16 +102,22 @@ create policy "Authenticated users can manage worksheets"
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
 
-insert into public.worksheets (name, slug, label)
-values ('Pilgrimage Affairs', 'Pilgrimage Affairs', 'مكاتب شؤون الحج')
-on conflict (slug) do update set name = excluded.name, label = excluded.label, country = excluded.country;
+insert into public.worksheets (name, slug, label, company)
+values ('Pilgrimage Affairs', 'Pilgrimage Affairs', 'مكاتب شؤون الحج', 'alrajhi')
+on conflict (company, slug) do update set
+  name = excluded.name,
+  label = excluded.label,
+  country = excluded.country;
 
-insert into public.worksheets (name, slug, label, country)
+insert into public.worksheets (name, slug, label, country, company)
 values
-  ('Niger', 'Niger', 'النيجر', 'النيجر'),
-  ('Egypt', 'Egypt', 'مصر', 'مصر'),
-  ('Pakistan', 'Pakistan', 'باكستان', 'باكستان')
-on conflict (slug) do update set name = excluded.name, label = excluded.label, country = excluded.country;
+  ('Niger', 'Niger', 'النيجر', 'النيجر', 'alrajhi'),
+  ('Egypt', 'Egypt', 'مصر', 'مصر', 'alrajhi'),
+  ('Pakistan', 'Pakistan', 'باكستان', 'باكستان', 'alrajhi')
+on conflict (company, slug) do update set
+  name = excluded.name,
+  label = excluded.label,
+  country = excluded.country;
 
 -- ============================================
 -- 3. Timeline nodes table

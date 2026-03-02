@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate, useParams } from "react-router-dom";
+import { Helmet } from "react-helmet";
 import Timeline from "./pages/Timeline";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -9,6 +10,10 @@ function CompanyEntry() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <Helmet>
+        <title>اختيار البوابة</title>
+        <link rel="icon" href="/logorajhi.webp" />
+      </Helmet>
       <div className="w-full max-w-3xl bg-white rounded-2xl shadow-lg p-8" dir="rtl">
         <h1 className="text-2xl font-bold text-[#1E4483] text-center mb-2">اختر البوابة</h1>
         <p className="text-sm text-gray-500 text-center mb-8">يرجى اختيار الجهة للمتابعة</p>

@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, useEffect } from "react";
+import { Helmet } from "react-helmet";
 import { useNavigate, useParams } from "react-router-dom";
 import ReactCountryFlag from "react-country-flag";
 import TimelineTrack from "../components/TimelineTrack";
@@ -59,6 +60,7 @@ export default function Timeline() {
   const { company, worksheetSlug } = useParams();
   const currentCompany = company || "alrajhi";
   const brand = getCompanyBrand(currentCompany);
+  const companyName = currentCompany === "saudia" ? "السعودية" : "الراجحي";
   const resolvedSlug = decodeWorksheetSlug(worksheetSlug);
   const pathRef = useRef<SVGPathElement>(null);
   const [points, setPoints] = useState<[number, number][]>([]);
@@ -165,11 +167,16 @@ export default function Timeline() {
   }, [nodes]);
 
   const currentIdx = nodes.length > 0 ? findCurrentIdx(nodes) : 0;
+  const pageTitle = `${worksheet ? worksheetLabelText(worksheet) : "الجدول الزمني"} - ${companyName}`;
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: `url('${bgUrl()}')` }}>
+        <Helmet>
+          <title>{`جاري التحميل - ${companyName}`}</title>
+          <link rel="icon" href={brand.logo} />
+        </Helmet>
         <div className="text-2xl font-bold text-white animate-pulse">جاري التحميل...</div>
       </div>
     );
@@ -179,6 +186,10 @@ export default function Timeline() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: `url('${bgUrl()}')` }}>
+        <Helmet>
+          <title>{`Worksheet غير موجود - ${companyName}`}</title>
+          <link rel="icon" href={brand.logo} />
+        </Helmet>
         <div className="bg-white/95 rounded-2xl shadow-xl p-8 text-center" dir="rtl">
           <h1 className="text-xl font-bold mb-2" style={{ color: brand.primary }}>الـ Worksheet غير موجود</h1>
           <p className="text-sm text-gray-500 mb-5">تأكد من الرابط أو أنشئ Worksheet جديد من لوحة التحكم.</p>
@@ -195,6 +206,10 @@ export default function Timeline() {
   return (
     <div className="min-h-screen bg-cover bg-center bg-no-repeat"
       style={{ backgroundImage: `url('${bgUrl()}')` }}>
+      <Helmet>
+        <title>{pageTitle}</title>
+        <link rel="icon" href={brand.logo} />
+      </Helmet>
       <div className="w-full max-w-[1990px] mx-auto lg:pr-15 lg:pl-25 pl-5 md:pl-10">
         <svg viewBox="0 0 1600 884" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" direction="ltr">
           <TimelineTrack pathRef={pathRef} />

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, type ChangeEvent } from "react";
+import { Helmet } from "react-helmet";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase, iconUrl, BG_KEY, getCompanyBrand, type NodeRow, type WorksheetRow } from "../lib/supabase";
 import * as XLSX from "xlsx";
@@ -135,6 +136,7 @@ export default function Dashboard() {
   const { company, worksheetSlug } = useParams();
   const currentCompany = company || "alrajhi";
   const brand = getCompanyBrand(currentCompany);
+  const companyName = currentCompany === "saudia" ? "السعودية" : "الراجحي";
   const themeP = brand.primary;
   const themeS = currentCompany === "saudia" ? "#046A38" : S;
   const resolvedSlug = decodeWorksheetSlug(worksheetSlug || DEFAULT_WORKSHEET_SLUG);
@@ -424,8 +426,8 @@ export default function Dashboard() {
     const country = worksheetForm.country || null;
     const { data, error } = await supabase
       .from("worksheets")
-      .insert({ name, slug, label, country })
-      .select("id,name,slug,label,country")
+      .insert({ name, slug, label, country, company: currentCompany })
+      .select("id,name,slug,label,country,company")
       .maybeSingle();
     if (error || !data) {
       msg("خطأ: " + (error?.message ?? "لا تملك صلاحية إنشاء Worksheet"), "err");
@@ -454,7 +456,8 @@ export default function Dashboard() {
       .from("worksheets")
       .update({ name, slug, label, country })
       .eq("id", currentWorksheet.id)
-      .select("id,name,slug,label,country")
+      .eq("company", currentCompany)
+      .select("id,name,slug,label,country,company")
       .maybeSingle();
 
     if (error || !data) {
@@ -484,8 +487,8 @@ export default function Dashboard() {
 
     const { data: created, error: createErr } = await supabase
       .from("worksheets")
-      .insert({ name, slug, label, country })
-      .select("id,name,slug,label,country")
+      .insert({ name, slug, label, country, company: currentCompany })
+      .select("id,name,slug,label,country,company")
       .maybeSingle();
 
     if (createErr || !created) {
@@ -545,7 +548,7 @@ export default function Dashboard() {
     }
 
     setSaving(-1);
-    const { error } = await supabase.from("worksheets").delete().eq("id", currentWorksheet.id);
+    const { error } = await supabase.from("worksheets").delete().eq("id", currentWorksheet.id).eq("company", currentCompany);
     if (error) {
       msg("خطأ: " + error.message, "err");
       setSaving(null);
@@ -626,9 +629,14 @@ export default function Dashboard() {
   const btn = "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold transition cursor-pointer";
   const btnOut = `${btn} border`;
   const outStyle = { borderColor: "rgba(255,255,255,.25)", color: "white" };
+  const pageTitle = `لوحة التحكم - ${companyName}`;
 
   return (
     <div className="min-h-screen bg-gray-50" dir="rtl">
+      <Helmet>
+        <title>{pageTitle}</title>
+        <link rel="icon" href={brand.logo} />
+      </Helmet>
       <header className="sticky top-0 z-30 border-b border-gray-200" style={{ background: themeP }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
