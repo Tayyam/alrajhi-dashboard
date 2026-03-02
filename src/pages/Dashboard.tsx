@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type ChangeEvent } from "react";
 import { Helmet } from "react-helmet";
 import { useNavigate, useParams } from "react-router-dom";
-import { supabase, iconUrl, BG_KEY, getCompanyBrand, progressFromTasks, worksheetLabel, type NodeRow, type WorksheetRow } from "../lib/supabase";
+import { supabase, iconUrl, BG_KEY, getCompanyBrand, progressFromTasks, sortTasks, worksheetLabel, type NodeRow, type TaskRow, type WorksheetRow } from "../lib/supabase";
 import * as XLSX from "xlsx";
 import { decodeWorksheetSlug, DEFAULT_WORKSHEET_SLUG, makeWorksheetSlug } from "../lib/worksheets";
 
@@ -36,19 +36,46 @@ function statusBadge(progress: number, date: string) {
   return <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">قادم</span>;
 }
 
-function TasksManager({ nodeId, tasks, iconList, msg, onRefresh, primary }: { nodeId: number, tasks: any[], iconList: string[], msg: any, onRefresh: () => void, primary: string }) {
+function TasksManager({
+  nodeId, tasks, iconList, msg, onRefresh, onTasksChange, primary,
+}: {
+  nodeId: number;
+  tasks: TaskRow[];
+  iconList: string[];
+  msg: (text: string, type: "ok" | "err") => void;
+  onRefresh: () => void;
+  onTasksChange: (tasks: TaskRow[]) => void;
+  primary: string;
+}) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ title: "", is_done: false, icon: "" });
   const [savingTask, setSavingTask] = useState(false);
+  const [optimisticTasks, setOptimisticTasks] = useState<TaskRow[]>(sortTasks(tasks));
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    setOptimisticTasks(sortTasks(tasks));
+  }, [tasks]);
+
+  async function persistOrder(ordered: TaskRow[]) {
+    const updates = ordered.map((task, idx) =>
+      supabase.from("timeline_tasks").update({ sort_order: idx + 1 }).eq("id", task.id)
+    );
+    const results = await Promise.all(updates);
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw new Error(failed.error.message);
+  }
 
   async function handleAdd() {
     if (!form.title) { msg("يرجى إدخال العنوان", "err"); return; }
     setSavingTask(true);
+    const maxOrder = optimisticTasks.reduce((m, t) => Math.max(m, t.sort_order ?? 0), 0);
     const { error } = await supabase.from("timeline_tasks").insert({
       node_id: nodeId,
       title: form.title,
       is_done: form.is_done,
-      icon: form.icon || null
+      icon: form.icon || null,
+      sort_order: maxOrder + 1,
     });
     if (error) msg("خطأ: " + error.message, "err");
     else { msg("تمت إضافة المهمة", "ok"); setForm({ title: "", is_done: false, icon: "" }); setAdding(false); onRefresh(); }
@@ -56,10 +83,18 @@ function TasksManager({ nodeId, tasks, iconList, msg, onRefresh, primary }: { no
   }
 
   async function handleToggleDone(taskId: number, currentValue: boolean) {
+    const nextValue = !currentValue;
+    const optimistic = optimisticTasks.map((t) => t.id === taskId ? { ...t, is_done: nextValue } : t);
+    setOptimisticTasks(optimistic);
+    onTasksChange(optimistic);
     setSavingTask(true);
-    const { error } = await supabase.from("timeline_tasks").update({ is_done: !currentValue }).eq("id", taskId);
-    if (error) msg("خطأ: " + error.message, "err");
-    else onRefresh();
+    const { error } = await supabase.from("timeline_tasks").update({ is_done: nextValue }).eq("id", taskId);
+    if (error) {
+      const reverted = optimisticTasks.map((t) => t.id === taskId ? { ...t, is_done: currentValue } : t);
+      setOptimisticTasks(reverted);
+      onTasksChange(reverted);
+      msg("خطأ: " + error.message, "err");
+    }
     setSavingTask(false);
   }
 
@@ -67,18 +102,77 @@ function TasksManager({ nodeId, tasks, iconList, msg, onRefresh, primary }: { no
     if (!confirm("تأكيد الحذف؟")) return;
     setSavingTask(true);
     const { error } = await supabase.from("timeline_tasks").delete().eq("id", taskId);
-    if (error) msg("خطأ: " + error.message, "err");
-    else { msg("تم الحذف", "ok"); onRefresh(); }
+    if (error) {
+      msg("خطأ: " + error.message, "err");
+    } else {
+      const next = optimisticTasks.filter((t) => t.id !== taskId);
+      setOptimisticTasks(next);
+      onTasksChange(next);
+      try {
+        await persistOrder(next);
+      } catch (e: any) {
+        msg("تم الحذف لكن فشل تحديث الترتيب: " + e.message, "err");
+      }
+      msg("تم الحذف", "ok");
+    }
     setSavingTask(false);
+  }
+
+  async function handleDrop(targetId: number) {
+    if (draggingId === null || draggingId === targetId) return;
+    const prev = optimisticTasks;
+    const from = prev.findIndex((t) => t.id === draggingId);
+    const to = prev.findIndex((t) => t.id === targetId);
+    if (from < 0 || to < 0) return;
+
+    const next = [...prev];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    const normalized = next.map((t, i) => ({ ...t, sort_order: i + 1 }));
+    setOptimisticTasks(normalized);
+    onTasksChange(normalized);
+    setDraggingId(null);
+
+    setSavingTask(true);
+    try {
+      await persistOrder(normalized);
+      msg("تم تحديث ترتيب الأهمية", "ok");
+    } catch (e: any) {
+      setOptimisticTasks(prev);
+      onTasksChange(prev);
+      msg("خطأ في حفظ الترتيب: " + e.message, "err");
+    } finally {
+      setSavingTask(false);
+    }
   }
 
   return (
     <div className="space-y-4">
-      {tasks.length > 0 ? (
+      {optimisticTasks.length > 0 ? (
         <div className="space-y-2">
-          {tasks.map(t => (
-            <div key={t.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-100">
+          {optimisticTasks.map((t, idx) => (
+            <div
+              key={t.id}
+              draggable={!savingTask}
+              onDragStart={() => setDraggingId(t.id)}
+              onDragEnd={() => setDraggingId(null)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleDrop(t.id)}
+              className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-100"
+              style={{ opacity: draggingId === t.id ? 0.6 : 1 }}
+              title="اسحب المهمة لتغيير الأولوية"
+            >
               <div className="flex items-center gap-3">
+                <div className="cursor-grab text-gray-400 select-none" aria-hidden>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" />
+                    <circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" />
+                    <circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" />
+                  </svg>
+                </div>
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold">
+                  #{idx + 1}
+                </span>
                 {t.icon && <img src={iconUrl(t.icon)} className="w-6 h-6" alt="" style={{ filter: "brightness(0) invert(1)" }} />}
                 <span className="text-sm font-semibold">{t.title}</span>
                 <span
@@ -89,11 +183,13 @@ function TasksManager({ nodeId, tasks, iconList, msg, onRefresh, primary }: { no
                 </span>
                 <button
                   onClick={() => handleToggleDone(t.id, !!t.is_done)}
+                  disabled={savingTask}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border-2 shadow-sm transition hover:shadow-md active:scale-95 cursor-pointer"
                   style={{
                     borderColor: !t.is_done ? "#22c55e" : "#ef4444",
                     background: !t.is_done ? "#f0fdf4" : "#fef2f2",
                     color: !t.is_done ? "#16a34a" : "#dc2626",
+                    opacity: savingTask ? 0.7 : 1,
                   }}
                   title={`تعيين الحالة: ${!t.is_done ? "true" : "false"}`}
                   aria-label={`تعيين الحالة: ${!t.is_done ? "true" : "false"}`}
@@ -233,10 +329,14 @@ export default function Dashboard() {
         setNodes((prev) => prev.filter((x) => x.id !== (o as NodeRow).id));
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "timeline_tasks" }, ({ new: n }) => {
-        setNodes((prev) => prev.map(node => node.id === n.node_id ? { ...node, tasks: [...(node.tasks || []), n as any] } : node));
+        setNodes((prev) => prev.map((node) =>
+          node.id === n.node_id ? { ...node, tasks: sortTasks([...(node.tasks || []), n as TaskRow]) } : node));
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "timeline_tasks" }, ({ new: n }) => {
-        setNodes((prev) => prev.map(node => node.id === n.node_id ? { ...node, tasks: (node.tasks || []).map(t => t.id === n.id ? n as any : t) } : node));
+        setNodes((prev) => prev.map((node) =>
+          node.id === n.node_id
+            ? { ...node, tasks: sortTasks((node.tasks || []).map((t) => t.id === n.id ? n as TaskRow : t)) }
+            : node));
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "timeline_tasks" }, ({ old: o }) => {
         setNodes((prev) => prev.map(node => ({ ...node, tasks: (node.tasks || []).filter(t => t.id !== o.id) })));
@@ -348,7 +448,11 @@ export default function Dashboard() {
   async function fetchNodes(worksheetId: string) {
     setLoading(true);
     const { data, error } = await supabase.from("timeline_nodes").select("*, tasks:timeline_tasks(*)").eq("worksheet_id", worksheetId).order("date", { ascending: true });
-    if (error) msg(error.message, "err"); else if (data) setNodes(data as NodeRow[]);
+    if (error) msg(error.message, "err");
+    else if (data) {
+      const sorted = (data as NodeRow[]).map((n) => ({ ...n, tasks: sortTasks(n.tasks) }));
+      setNodes(sorted);
+    }
     setLoading(false);
   }
 
@@ -965,6 +1069,10 @@ export default function Dashboard() {
                iconList={iconList} 
                msg={msg} 
                primary={themeP}
+               onTasksChange={(nextTasks) => {
+                 setNodes((prev) => prev.map((n) => n.id === editNode.id ? { ...n, tasks: sortTasks(nextTasks) } : n));
+                 setEditNode((prev) => prev && prev.id === editNode.id ? { ...prev, tasks: sortTasks(nextTasks) } : prev);
+               }}
                onRefresh={() => {
                  if (currentWorksheet) fetchNodes(currentWorksheet.id);
                }} 

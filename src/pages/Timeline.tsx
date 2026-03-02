@@ -6,7 +6,7 @@ import TimelineTrack, { getTrackViewBoxHeight } from "../components/TimelineTrac
 import TimelineNode, { type NodeStatus } from "../components/TimelineNode";
 import {
   supabase, bgUrl, getCompanyBrand,
-  progressFromTasks, worksheetLabel,
+  progressFromTasks, sortTasks, worksheetLabel,
   type NodeRow, type TaskRow, type WorksheetRow,
 } from "../lib/supabase";
 import { decodeWorksheetSlug } from "../lib/worksheets";
@@ -22,10 +22,11 @@ function getNodeStatus(progress: number, date: string): NodeStatus {
   return "default";
 }
 
-function getNodeFill(status: NodeStatus, idx: number) {
+function getNodeFill(status: NodeStatus, idx: number, company?: string) {
   if (status === "success") return { fill: "url(#gSuccess)", stroke: "#86efac" };
   if (status === "warning") return { fill: "url(#gWarning)", stroke: "#fcd34d" };
   if (status === "danger")  return { fill: "url(#gDanger)",  stroke: "#fca5a5" };
+  if (company === "saudia") return { fill: "url(#gBlue)", stroke: "#5a7ad8" };
   return idx % 2 === 0
     ? { fill: "url(#gGold)", stroke: "#fbe48c" }
     : { fill: "url(#gBlue)", stroke: "#5a7ad8" };
@@ -73,7 +74,7 @@ export default function Timeline() {
     if (!showSubtasks) return [];
     const items: TrackItem[] = [];
     nodes.forEach((node, ni) => {
-      (node.tasks ?? []).forEach((task, order) => items.push({ type: "task", task, nodeIdx: ni, taskOrder: order }));
+      sortTasks(node.tasks).forEach((task, order) => items.push({ type: "task", task, nodeIdx: ni, taskOrder: order }));
       items.push({ type: "node", node, nodeIdx: ni });
     });
     return items;
@@ -99,7 +100,8 @@ export default function Timeline() {
           .select("*, tasks:timeline_tasks(*)")
           .eq("worksheet_id", data.id)
           .order("date", { ascending: true });
-        setNodes((nodeData ?? []) as NodeRow[]);
+        const sorted = ((nodeData ?? []) as NodeRow[]).map((n) => ({ ...n, tasks: sortTasks(n.tasks) }));
+        setNodes(sorted);
         setLoading(false);
       });
   }, [resolvedSlug, currentCompany]);
@@ -111,7 +113,12 @@ export default function Timeline() {
       .select("*, tasks:timeline_tasks(*)")
       .eq("worksheet_id", worksheet.id)
       .order("date", { ascending: true })
-      .then(({ data }) => { if (data) setNodes(data as NodeRow[]); });
+      .then(({ data }) => {
+        if (data) {
+          const sorted = (data as NodeRow[]).map((n) => ({ ...n, tasks: sortTasks(n.tasks) }));
+          setNodes(sorted);
+        }
+      });
 
     const ch = supabase
       .channel(`timeline-rt-${worksheet.id}`)
@@ -128,11 +135,13 @@ export default function Timeline() {
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "timeline_tasks" }, ({ new: n }) => {
         setNodes((prev) => prev.map((node) =>
-          node.id === n.node_id ? { ...node, tasks: [...(node.tasks || []), n as any] } : node));
+          node.id === n.node_id ? { ...node, tasks: sortTasks([...(node.tasks || []), n as TaskRow]) } : node));
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "timeline_tasks" }, ({ new: n }) => {
         setNodes((prev) => prev.map((node) =>
-          node.id === n.node_id ? { ...node, tasks: (node.tasks || []).map((t) => (t.id === n.id ? n as any : t)) } : node));
+          node.id === n.node_id
+            ? { ...node, tasks: sortTasks((node.tasks || []).map((t) => (t.id === n.id ? n as TaskRow : t)) ) }
+            : node));
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "timeline_tasks" }, ({ old: o }) => {
         setNodes((prev) => prev.map((node) => ({ ...node, tasks: (node.tasks || []).filter((t) => t.id !== o.id) })));
@@ -262,7 +271,7 @@ export default function Timeline() {
                 const { node, nodeIdx } = item;
                 const prog   = progressFromTasks(node);
                 const status = getNodeStatus(prog, node.date);
-                const { fill, stroke } = getNodeFill(status, nodeIdx);
+                const { fill, stroke } = getNodeFill(status, nodeIdx, currentCompany);
                 return (
                   <TimelineNode key={`node-${node.id}`}
                     cx={cx} cy={cy} title={node.title} date={node.date}
@@ -277,7 +286,7 @@ export default function Timeline() {
               const dueTime    = new Date(nodes[nodeIdx]?.date ?? "").getTime();
               const isOverdue  = Number.isFinite(dueTime) && dueTime <= Date.now();
               const taskStatus: NodeStatus = isDone ? "success" : (isOverdue ? "danger" : "default");
-              const { fill, stroke } = getNodeFill("default", nodeIdx);
+              const { fill, stroke } = getNodeFill(taskStatus, nodeIdx, currentCompany);
               const adj = trackItems[i - 1]?.type === "node" || trackItems[i + 1]?.type === "node";
               return (
                 <TimelineNode key={`task-${task.id}`}
@@ -299,7 +308,7 @@ export default function Timeline() {
             const node     = nodes[i];
             const prog     = currentCompany === "saudia" ? progressFromTasks(node) : node.progress;
             const status   = getNodeStatus(prog, node.date);
-            const { fill, stroke } = getNodeFill(status, i);
+            const { fill, stroke } = getNodeFill(status, i, currentCompany);
             return (
               <TimelineNode key={node.id}
                 cx={cx} cy={cy} title={node.title} date={node.date}

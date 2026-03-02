@@ -13,6 +13,8 @@ export interface TaskRow {
   title: string;
   is_done: boolean;
   icon?: string | null;
+  sort_order?: number | null;
+  created_at?: string;
 }
 
 export interface NodeRow {
@@ -76,4 +78,17 @@ export function progressFromTasks(node: NodeRow): number {
 /** Display label for a worksheet (label takes priority over name). */
 export function worksheetLabel(worksheet?: WorksheetRow | null): string {
   return worksheet?.label?.trim() || worksheet?.name || "";
+}
+
+/** Stable ordering for sub-tasks (priority first, then created/id fallback). */
+export function sortTasks(tasks?: TaskRow[] | null): TaskRow[] {
+  return [...(tasks ?? [])].sort((a, b) => {
+    const ao = a.sort_order ?? Number.MAX_SAFE_INTEGER;
+    const bo = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+    if (ao !== bo) return ao - bo;
+    const at = a.created_at ? new Date(a.created_at).getTime() : Number.MAX_SAFE_INTEGER;
+    const bt = b.created_at ? new Date(b.created_at).getTime() : Number.MAX_SAFE_INTEGER;
+    if (at !== bt) return at - bt;
+    return a.id - b.id;
+  });
 }

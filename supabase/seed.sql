@@ -222,11 +222,16 @@ create table if not exists public.timeline_tasks (
   title text not null,
   is_done boolean not null default false,
   icon text,
+  sort_order integer,
   created_at timestamptz not null default now()
 );
 
 alter table public.timeline_tasks enable row level security;
 alter table public.timeline_tasks add column if not exists is_done boolean not null default false;
+alter table public.timeline_tasks add column if not exists sort_order integer;
+
+create index if not exists idx_timeline_tasks_node_sort
+  on public.timeline_tasks (node_id, sort_order, id);
 
 drop policy if exists "Anyone can read timeline tasks" on public.timeline_tasks;
 create policy "Anyone can read timeline tasks"
