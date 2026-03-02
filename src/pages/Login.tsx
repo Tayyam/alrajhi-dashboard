@@ -1,9 +1,12 @@
 import { useState, useEffect, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
-import { supabase, bgUrl, LOGO } from "../lib/supabase";
+import { useNavigate, useParams } from "react-router-dom";
+import { supabase, bgUrl, getCompanyBrand } from "../lib/supabase";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { company } = useParams();
+  const currentCompany = company || "alrajhi";
+  const brand = getCompanyBrand(currentCompany);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -12,10 +15,10 @@ export default function Login() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate("/alrajhi/dashboard", { replace: true });
+      if (data.session) navigate(`/${currentCompany}/dashboard`, { replace: true });
       else setChecking(false);
     });
-  }, []);
+  }, [currentCompany, navigate]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -24,7 +27,7 @@ export default function Login() {
     const { error: err } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (err) { setError(err.message); return; }
-    navigate("/alrajhi/dashboard");
+    navigate(`/${currentCompany}/dashboard`);
   }
 
   if (checking) {
@@ -41,10 +44,10 @@ export default function Login() {
       style={{ backgroundImage: `url('${bgUrl()}')` }}>
       <div className="w-full max-w-md bg-white/95 rounded-2xl shadow-xl p-8 backdrop-blur-sm" dir="rtl">
         <div className="flex justify-center mb-6">
-          <img src={LOGO} alt="Logo" className="h-20 object-contain" />
+          <img src={brand.logo} alt="Logo" className="h-20 object-contain" />
         </div>
 
-        <h1 className="text-2xl font-bold text-center text-[#1E4483] mb-2">تسجيل الدخول</h1>
+        <h1 className="text-2xl font-bold text-center mb-2" style={{ color: brand.primary }}>تسجيل الدخول</h1>
         <p className="text-sm text-center text-gray-500 mb-8">الجدول الزمني لمهام مكاتب شؤون الحج</p>
 
         {error && (
@@ -65,7 +68,8 @@ export default function Login() {
               placeholder="••••••••" dir="ltr" />
           </div>
           <button type="submit" disabled={loading}
-            className="w-full py-3 rounded-xl bg-[#1E4483] text-white font-bold text-base hover:bg-[#163366] transition disabled:opacity-60 cursor-pointer">
+            className="w-full py-3 rounded-xl text-white font-bold text-base transition disabled:opacity-60 cursor-pointer"
+            style={{ background: brand.primary }}>
             {loading ? "جاري التحميل..." : "دخول"}
           </button>
         </form>

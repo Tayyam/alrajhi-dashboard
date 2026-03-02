@@ -212,16 +212,18 @@ export default function Timeline() {
       </Helmet>
       <div className="w-full max-w-[1990px] mx-auto lg:pr-15 lg:pl-25 pl-5 md:pl-10">
         <svg viewBox="0 0 1600 884" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" direction="ltr">
-          <TimelineTrack pathRef={pathRef} />
+          <TimelineTrack pathRef={pathRef} company={currentCompany} />
 
-          {points.length > 0 && (() => {
-            const [, hy] = points[points.length - 1];
-            const hx = points[points.length - 1][0] / 2;
+          {(() => {
+            const hasPoints = points.length > 0;
+            const hy = hasPoints ? points[points.length - 1][1] : 210;
+            const hx = hasPoints ? points[points.length - 1][0] / 2 : 270;
+
             return (
               <g className="header-fade">
                 <rect x={hx - 155} y={hy - 145} width="310" height="260" rx="16" fill="white" opacity="0.95" filter="url(#fShadow)" />
                 <image href={brand.logo} x={hx - 130} y={hy - 135} width="260" height="120"
-                  className="cursor-pointer" onClick={() => navigate("/login")} />
+                  className="cursor-pointer" onClick={() => navigate(`/${currentCompany}/dashboard`)} />
                 <foreignObject x={hx - 140} y={hy + 2} width="280" height="76">
                   <div className="flex flex-col items-center justify-center" style={{ color: brand.primary }}>
                     <div className="text-[26px] font-bold leading-tight">الجدول الزمني لمهام</div>
@@ -254,7 +256,7 @@ export default function Timeline() {
               <TimelineNode key={node.id} cx={cx} cy={cy} title={node.title} date={node.date}
                 icon={node.icon} fill={fill} stroke={stroke}
                 progress={node.progress} status={status} index={i}
-                isCurrent={i === currentIdx} tasks={node.tasks} />
+                isCurrent={i === currentIdx} tasks={node.tasks} company={currentCompany} />
             );
           })}
         </svg>

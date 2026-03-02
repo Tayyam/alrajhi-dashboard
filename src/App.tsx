@@ -1,13 +1,13 @@
-import { Routes, Route, Navigate, useParams } from "react-router-dom";
+import { useEffect } from "react";
+import { Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet";
 import Timeline from "./pages/Timeline";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import { DEFAULT_WORKSHEET_SLUG } from "./lib/worksheets";
+import { supabase } from "./lib/supabase";
 
 function CompanyEntry() {
-  const slug = encodeURIComponent(DEFAULT_WORKSHEET_SLUG);
-
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <Helmet>
@@ -20,7 +20,7 @@ function CompanyEntry() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <a
-            href={`/alrajhi/${slug}`}
+            href="/alrajhi"
             className="rounded-xl border border-gray-200 p-5 hover:border-[#1E4483] hover:shadow-md transition"
           >
             <h2 className="text-lg font-bold text-[#1E4483] mb-1">الراجحي</h2>
@@ -28,7 +28,7 @@ function CompanyEntry() {
           </a>
 
           <a
-            href={`/saudia/${slug}`}
+            href="/saudia"
             className="rounded-xl border border-gray-200 p-5 hover:border-[#1E4483] hover:shadow-md transition"
           >
             <h2 className="text-lg font-bold text-[#1E4483] mb-1">السعودية</h2>
@@ -41,15 +41,70 @@ function CompanyEntry() {
 }
 
 function CompanyRedirect() {
+  const navigate = useNavigate();
   const { company } = useParams();
-  return <Navigate to={`/${company}/${encodeURIComponent(DEFAULT_WORKSHEET_SLUG)}`} replace />;
+  const currentCompany = company || "alrajhi";
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resolveDefaultWorksheet() {
+      let slug = DEFAULT_WORKSHEET_SLUG;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const uid = sessionData.session?.user?.id;
+
+      if (uid) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("default_worksheet_id")
+          .eq("id", uid)
+          .maybeSingle();
+
+        const defaultId = profile?.default_worksheet_id;
+        if (defaultId) {
+          const { data: defaultWorksheet } = await supabase
+            .from("worksheets")
+            .select("slug")
+            .eq("id", defaultId)
+            .eq("company", currentCompany)
+            .maybeSingle();
+
+          if (defaultWorksheet?.slug) slug = defaultWorksheet.slug;
+        }
+      }
+
+      if (slug === DEFAULT_WORKSHEET_SLUG) {
+        const { data: firstWorksheet } = await supabase
+          .from("worksheets")
+          .select("slug")
+          .eq("company", currentCompany)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (firstWorksheet?.slug) slug = firstWorksheet.slug;
+      }
+
+      if (!cancelled) {
+        navigate(`/${currentCompany}/${encodeURIComponent(slug)}`, { replace: true });
+      }
+    }
+
+    resolveDefaultWorksheet();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentCompany, navigate]);
+
+  return null;
 }
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<CompanyEntry />} />
-      <Route path="/login" element={<Login />} />
+      <Route path="/login" element={<Navigate to="/" replace />} />
+      <Route path="/:company/login" element={<Login />} />
       <Route path="/:company/dashboard/:worksheetSlug?" element={<Dashboard />} />
       <Route path="/:company" element={<CompanyRedirect />} />
       <Route path="/:company/:worksheetSlug" element={<Timeline />} />

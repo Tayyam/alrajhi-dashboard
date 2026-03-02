@@ -7,8 +7,11 @@ create table if not exists public.profiles (
   id uuid references auth.users on delete cascade primary key,
   email text not null,
   role text not null default 'user' check (role in ('admin', 'user')),
+  default_worksheet_id uuid,
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles add column if not exists default_worksheet_id uuid;
 
 alter table public.profiles enable row level security;
 
@@ -47,6 +50,12 @@ create policy "Admins can read all profiles"
   on public.profiles for select
   using (public.is_admin(auth.uid()));
 
+drop policy if exists "Users can update own profile" on public.profiles;
+create policy "Users can update own profile"
+  on public.profiles for update
+  using (auth.uid() = id)
+  with check (auth.uid() = id);
+
 -- Auto-create profile on signup
 create or replace function public.handle_new_user()
 returns trigger as $$
@@ -83,6 +92,10 @@ alter table public.worksheets enable row level security;
 alter table public.worksheets add column if not exists label text;
 alter table public.worksheets add column if not exists country text;
 alter table public.worksheets add column if not exists company text not null default 'alrajhi';
+alter table public.profiles drop constraint if exists profiles_default_worksheet_id_fkey;
+alter table public.profiles
+  add constraint profiles_default_worksheet_id_fkey
+  foreign key (default_worksheet_id) references public.worksheets(id) on delete set null;
 drop index if exists worksheets_slug_key;
 create unique index if not exists worksheets_company_slug_key on public.worksheets (company, slug);
 

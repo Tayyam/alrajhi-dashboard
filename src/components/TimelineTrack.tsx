@@ -4,21 +4,27 @@ export const TRACK = "M 560,245 H 1370 A 130 130 0 1 1 1370,505 H 130 A 110 130 
 
 interface Props {
   pathRef: RefObject<SVGPathElement | null>;
+  company?: string;
 }
 
-export default function TimelineTrack({ pathRef }: Props) {
+export default function TimelineTrack({ pathRef, company }: Props) {
+  const isSaudia = company === "saudia";
+  const baseStroke = isSaudia ? "#046A38" : "#253c8e";
+  const accentStroke = isSaudia ? "#D5F2E1" : "#c9a227";
+  const glowStroke = isSaudia ? "#FFFEFF" : "#fde68a";
+
   return (
     <>
       <defs>
         <radialGradient id="gBlue" cx="40%" cy="35%" r="65%">
-          <stop offset="0%" stopColor="#5b82e0" />
-          <stop offset="55%" stopColor="#2a4ab0" />
-          <stop offset="100%" stopColor="#142060" />
+          <stop offset="0%" stopColor={isSaudia ? "#1B8E56" : "#5b82e0"} />
+          <stop offset="55%" stopColor={isSaudia ? "#046A38" : "#2a4ab0"} />
+          <stop offset="100%" stopColor={isSaudia ? "#034F2A" : "#142060"} />
         </radialGradient>
         <radialGradient id="gGold" cx="40%" cy="35%" r="65%">
-          <stop offset="0%" stopColor="#f3d16f" />
-          <stop offset="55%" stopColor="#9B7619" />
-          <stop offset="100%" stopColor="#C8AA5D" />
+          <stop offset="0%" stopColor={isSaudia ? "#8CCFAE" : "#f3d16f"} />
+          <stop offset="55%" stopColor={isSaudia ? "#1E8C5A" : "#9B7619"} />
+          <stop offset="100%" stopColor={isSaudia ? "#046A38" : "#C8AA5D"} />
         </radialGradient>
         <radialGradient id="gSuccess" cx="40%" cy="35%" r="65%">
           <stop offset="0%" stopColor="#4ade80" />
@@ -46,18 +52,18 @@ export default function TimelineTrack({ pathRef }: Props) {
           </feMerge>
         </filter>
         <radialGradient id="glowDot">
-          <stop offset="0%" stopColor="#fde68a" />
-          <stop offset="40%" stopColor="#c9a227" stopOpacity="0.6" />
-          <stop offset="100%" stopColor="#c9a227" stopOpacity="0" />
+          <stop offset="0%" stopColor={glowStroke} />
+          <stop offset="40%" stopColor={accentStroke} stopOpacity="0.6" />
+          <stop offset="100%" stopColor={accentStroke} stopOpacity="0" />
         </radialGradient>
       </defs>
 
       <path ref={pathRef} id="trackPath" d={TRACK}
-        fill="none" stroke="#253c8e" strokeWidth="27.72" strokeLinecap="round" />
+        fill="none" stroke={baseStroke} strokeWidth="27.72" strokeLinecap="round" />
 
-      <path d={TRACK} fill="none" stroke="#c9a227" strokeWidth="2.31" strokeLinecap="round" />
+      <path d={TRACK} fill="none" stroke={accentStroke} strokeWidth="2.31" strokeLinecap="round" />
 
-      <path d={TRACK} fill="none" stroke="#fde68a" strokeWidth="1.5"
+      <path d={TRACK} fill="none" stroke={glowStroke} strokeWidth="1.5"
         strokeLinecap="round" filter="url(#fGlow)" className="path-glow" />
 
       <circle r="18" fill="url(#glowDot)" filter="url(#fGlow)">

@@ -15,6 +15,7 @@ interface TimelineNodeProps {
   index: number;
   isCurrent: boolean;
   tasks?: TaskRow[];
+  company?: string;
 }
 
 const hijriFormatter = new Intl.DateTimeFormat("ar-SA", {
@@ -46,10 +47,12 @@ const statusRingColor: Record<NodeStatus, string> = {
   default: "#C8AA5D",
 };
 
-export default function TimelineNode({ cx, cy, title, date, icon, fill, stroke, progress, status, index, isCurrent, tasks }: TimelineNodeProps) {
+export default function TimelineNode({ cx, cy, title, date, icon, fill, stroke, progress, status, index, isCurrent, tasks, company }: TimelineNodeProps) {
+  const isSaudia = company === "saudia";
+  const brandPrimary = isSaudia ? "#046A38" : "#C8AA5D";
   const hijriDate = toHijri(date);
-  const textColor = statusTextColor[status];
-  const ringColor = statusRingColor[status];
+  const textColor = status === "default" && isSaudia ? "#046A38" : statusTextColor[status];
+  const ringColor = status === "default" && isSaudia ? "#46A974" : statusRingColor[status];
   const [line1, line2] = splitTitle(title);
 
   const ORBIT_RADIUS = 85;
@@ -61,17 +64,17 @@ export default function TimelineNode({ cx, cy, title, date, icon, fill, stroke, 
         const angle = (i / tasks.length) * 2 * Math.PI - Math.PI / 2;
         const tx = cx + Math.cos(angle) * ORBIT_RADIUS;
         const ty = cy + Math.sin(angle) * ORBIT_RADIUS;
-        return <line key={`line-${task.id}`} x1={cx} y1={cy} x2={tx} y2={ty} stroke="#cbd5e1" strokeWidth="2" strokeDasharray="4 2" />;
+        return <line key={`line-${task.id}`} x1={cx} y1={cy} x2={tx} y2={ty} stroke={isSaudia ? "#7FC6A1" : "#cbd5e1"} strokeWidth="2" strokeDasharray="4 2" />;
       })}
 
       <text x={cx} y={cy - 105} textAnchor="middle">
         <tspan fontSize="15" fontWeight="700" x={cx} dy="0">{line1}</tspan>
         <tspan fontSize="15" fontWeight="700" x={cx} dy="1.4em">{line2}</tspan>
-        <tspan fontSize="14" fontWeight="700" fill="#b87200" x={cx} dy="1.4em">{hijriDate}</tspan>
+        <tspan fontSize="14" fontWeight="700" fill={isSaudia ? "#046A38" : "#b87200"} x={cx} dy="1.4em">{hijriDate}</tspan>
       </text>
 
       {isCurrent && (
-        <circle cx={cx} cy={cy} r="45" stroke="#C8AA5D" strokeWidth="5" fill="none"
+        <circle cx={cx} cy={cy} r="45" stroke={brandPrimary} strokeWidth="5" fill="none"
           strokeLinecap="round" strokeDasharray="50 30"
           style={{ transformOrigin: `${cx}px ${cy}px` }} className="spin-circle" />
       )}
@@ -102,7 +105,7 @@ export default function TimelineNode({ cx, cy, title, date, icon, fill, stroke, 
         const tx = cx + Math.cos(angle) * ORBIT_RADIUS;
         const ty = cy + Math.sin(angle) * ORBIT_RADIUS;
         const isTaskComplete = task.progress === 100;
-        const taskFill = isTaskComplete ? "#16a34a" : (task.progress > 0 ? "#d97706" : "#6b7280");
+        const taskFill = isTaskComplete ? "#16a34a" : (task.progress > 0 ? (isSaudia ? "#046A38" : "#d97706") : "#6b7280");
 
         return (
           <g key={`task-${task.id}`}>

@@ -165,6 +165,7 @@ export default function Dashboard() {
   const [worksheetDuplicateForm, setWorksheetDuplicateForm] = useState(emptyWorksheetDuplicateForm);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [defaultWorksheetId, setDefaultWorksheetId] = useState<string | null>(null);
 
   const [iconList, setIconList] = useState<string[]>([]);
   const [pendingIcon, setPendingIcon] = useState<{ file: File; setForm: (fn: (f: typeof emptyForm) => typeof emptyForm) => void; oldIcon?: string } | null>(null);
@@ -221,10 +222,26 @@ export default function Dashboard() {
 
   async function checkAuth() {
     const { data } = await supabase.auth.getSession();
-    if (!data.session) navigate("/login", { replace: true });
+    if (!data.session) navigate(`/${currentCompany}/login`, { replace: true });
   }
 
   async function fetchWorksheets() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const uid = sessionData.session?.user?.id;
+    let userDefaultWorksheetId: string | null = null;
+
+    if (uid) {
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("default_worksheet_id")
+        .eq("id", uid)
+        .maybeSingle();
+      userDefaultWorksheetId = profileData?.default_worksheet_id ?? null;
+      setDefaultWorksheetId(userDefaultWorksheetId);
+    } else {
+      setDefaultWorksheetId(null);
+    }
+
     const { data, error } = await supabase.from("worksheets").select("id,name,slug,label,country,company").eq("company", currentCompany).order("created_at", { ascending: true });
     if (error) {
       msg(error.message, "err");
@@ -233,12 +250,39 @@ export default function Dashboard() {
     }
     const list = (data ?? []) as WorksheetRow[];
     setWorksheets(list);
-    const selected = list.find((w) => w.slug === resolvedSlug) ?? list.find((w) => w.slug === DEFAULT_WORKSHEET_SLUG) ?? list[0] ?? null;
+    const selected = (worksheetSlug ? list.find((w) => w.slug === resolvedSlug) : null)
+      ?? list.find((w) => w.id === userDefaultWorksheetId)
+      ?? list.find((w) => w.slug === DEFAULT_WORKSHEET_SLUG)
+      ?? list[0]
+      ?? null;
     setCurrentWorksheet(selected);
     if (selected && selected.slug !== resolvedSlug) {
       navigate(`/${currentCompany}/dashboard/${encodeURIComponent(selected.slug)}`, { replace: true });
     }
     if (!selected) setLoading(false);
+  }
+
+  async function handleSetDefaultWorksheet() {
+    if (!currentWorksheet) { msg("الـ Worksheet غير محدد", "err"); return; }
+    const { data: sessionData } = await supabase.auth.getSession();
+    const uid = sessionData.session?.user?.id;
+    if (!uid) { msg("يرجى تسجيل الدخول أولاً", "err"); return; }
+
+    setSaving(-1);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ default_worksheet_id: currentWorksheet.id })
+      .eq("id", uid);
+
+    if (error) {
+      msg("خطأ: " + error.message, "err");
+      setSaving(null);
+      return;
+    }
+
+    setDefaultWorksheetId(currentWorksheet.id);
+    msg("تم تعيين الـ Worksheet الافتراضي", "ok");
+    setSaving(null);
   }
 
   async function fetchNodes(worksheetId: string) {
@@ -583,7 +627,7 @@ export default function Dashboard() {
     }
   }
 
-  async function handleLogout() { await supabase.auth.signOut(); navigate("/login"); }
+  async function handleLogout() { await supabase.auth.signOut(); navigate(`/${currentCompany}/login`); }
 
   function formFields(form: typeof emptyForm, setForm: (f: typeof emptyForm) => void, ref: React.RefObject<HTMLInputElement | null>, oldIcon?: string) {
     return (
@@ -671,6 +715,11 @@ export default function Dashboard() {
                 <div className="absolute left-0 top-full mt-1 w-64 bg-white rounded-xl shadow-xl border border-gray-200 py-1 z-50" dir="rtl">
                   <MenuItem icon="M17 8l4 4m0 0l-4 4m4-4H3" label="الصفحة الرئيسية"
                     onClick={() => { navigate(`/${currentCompany}/${encodeURIComponent(currentWorksheet?.slug ?? DEFAULT_WORKSHEET_SLUG)}`); setShowMenu(false); }} />
+                  <MenuItem
+                    icon="M5 13l4 4L19 7"
+                    label={defaultWorksheetId === currentWorksheet?.id ? "Worksheet الافتراضي الحالي" : "تعيين كافتراضي"}
+                    onClick={async () => { await handleSetDefaultWorksheet(); setShowMenu(false); }}
+                  />
                   <hr className="border-gray-100 my-1" />
                   <MenuItem icon="M12 4v16m8-8H4" label="Worksheet جديد"
                     onClick={() => { setShowWorksheetCreate(true); setShowMenu(false); }} />
