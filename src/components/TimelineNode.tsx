@@ -55,14 +55,13 @@ const STATUS_RING: Record<NodeStatus, string> = {
 };
 
 export default function TimelineNode({
-  cx, cy, title, date, icon, fill, stroke, progress, status, index, isCurrent, company,
+  cx, cy, title, date, icon, fill, stroke, progress, status, index, isCurrent,
   nodeScale = 1, titlePlacement = "top", titleFontScale = 1,
   showProgress = true, showStatusRing = false, animate = true, titleShiftY = 0,
 }: Props) {
-  const isSaudia    = company === "saudia";
-  const brandColor  = isSaudia ? "#046A38" : "#C8AA5D";
-  const textColor   = status === "default" && isSaudia ? "#046A38" : STATUS_TEXT[status];
-  const ringColor   = status === "default" && isSaudia ? "#46A974" : STATUS_RING[status];
+  const brandColor  = "#C8AA5D";
+  const textColor   = STATUS_TEXT[status];
+  const ringColor   = STATUS_RING[status];
   const hijriDate   = date ? toHijri(date) : null;
   const [line1, line2] = splitTitle(title);
 
@@ -89,7 +88,7 @@ export default function TimelineNode({
         <tspan fontSize={titleFs} fontWeight="700" x={cx} dy="0">{line1}</tspan>
         <tspan fontSize={titleFs} fontWeight="700" x={cx} dy="1.4em">{line2}</tspan>
         {hijriDate && (
-          <tspan fontSize={fs} fontWeight="700" fill={isSaudia ? "#046A38" : "#b87200"} x={cx} dy="1.4em">
+          <tspan fontSize={fs} fontWeight="700" fill="#b87200" x={cx} dy="1.4em">
             {hijriDate}
           </tspan>
         )}

@@ -22,16 +22,10 @@ function getNodeStatus(progress: number, date: string): NodeStatus {
   return "default";
 }
 
-function getNodeFill(status: NodeStatus, idx: number, company?: string) {
+function getNodeFill(status: NodeStatus, idx: number) {
   if (status === "success") return { fill: "url(#gSuccess)", stroke: "#86efac" };
   if (status === "warning") return { fill: "url(#gWarning)", stroke: "#fcd34d" };
   if (status === "danger")  return { fill: "url(#gDanger)",  stroke: "#fca5a5" };
-
-  if (company === "saudia") {
-    return idx % 2 === 0
-      ? { fill: "url(#gBlue)", stroke: "#ffffff" }
-      : { fill: "url(#gBlue)", stroke: "#8ed6b4" };
-  }
   return idx % 2 === 0
     ? { fill: "url(#gGold)", stroke: "#fbe48c" }
     : { fill: "url(#gBlue)", stroke: "#5a7ad8" };
@@ -268,7 +262,7 @@ export default function Timeline() {
                 const { node, nodeIdx } = item;
                 const prog   = progressFromTasks(node);
                 const status = getNodeStatus(prog, node.date);
-                const { fill, stroke } = getNodeFill(status, nodeIdx, currentCompany);
+                const { fill, stroke } = getNodeFill(status, nodeIdx);
                 return (
                   <TimelineNode key={`node-${node.id}`}
                     cx={cx} cy={cy} title={node.title} date={node.date}
@@ -283,7 +277,7 @@ export default function Timeline() {
               const dueTime    = new Date(nodes[nodeIdx]?.date ?? "").getTime();
               const isOverdue  = Number.isFinite(dueTime) && dueTime <= Date.now();
               const taskStatus: NodeStatus = isDone ? "success" : (isOverdue ? "danger" : "default");
-              const { fill, stroke } = getNodeFill("default", nodeIdx, currentCompany);
+              const { fill, stroke } = getNodeFill("default", nodeIdx);
               const adj = trackItems[i - 1]?.type === "node" || trackItems[i + 1]?.type === "node";
               return (
                 <TimelineNode key={`task-${task.id}`}
@@ -305,7 +299,7 @@ export default function Timeline() {
             const node     = nodes[i];
             const prog     = currentCompany === "saudia" ? progressFromTasks(node) : node.progress;
             const status   = getNodeStatus(prog, node.date);
-            const { fill, stroke } = getNodeFill(status, i, currentCompany);
+            const { fill, stroke } = getNodeFill(status, i);
             return (
               <TimelineNode key={node.id}
                 cx={cx} cy={cy} title={node.title} date={node.date}
