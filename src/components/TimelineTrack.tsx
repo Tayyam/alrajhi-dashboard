@@ -66,14 +66,14 @@ export default function TimelineTrack({ pathRef, company, nodeCount = 0 }: Props
     <>
       <defs>
         <radialGradient id="gBlue" cx="40%" cy="35%" r="65%">
-          <stop offset="0%"   stopColor={isSaudia ? "#1B8E56" : "#5b82e0"} />
-          <stop offset="55%"  stopColor={isSaudia ? "#046A38" : "#2a4ab0"} />
-          <stop offset="100%" stopColor={isSaudia ? "#034F2A" : "#142060"} />
+          <stop offset="0%"   stopColor={isSaudia ? "#3EA977" : "#5b82e0"} />
+          <stop offset="55%"  stopColor={isSaudia ? "#0C7A4A" : "#2a4ab0"} />
+          <stop offset="100%" stopColor={isSaudia ? "#046A38" : "#142060"} />
         </radialGradient>
         <radialGradient id="gGold" cx="40%" cy="35%" r="65%">
-          <stop offset="0%"   stopColor={isSaudia ? "#8CCFAE" : "#f3d16f"} />
-          <stop offset="55%"  stopColor={isSaudia ? "#1E8C5A" : "#9B7619"} />
-          <stop offset="100%" stopColor={isSaudia ? "#046A38" : "#C8AA5D"} />
+          <stop offset="0%"   stopColor={isSaudia ? "#EAF8F1" : "#f3d16f"} />
+          <stop offset="55%"  stopColor={isSaudia ? "#BFE5D0" : "#9B7619"} />
+          <stop offset="100%" stopColor={isSaudia ? "#86C8A5" : "#C8AA5D"} />
         </radialGradient>
         <radialGradient id="gSuccess" cx="40%" cy="35%" r="65%">
           <stop offset="0%"   stopColor="#4ade80" />

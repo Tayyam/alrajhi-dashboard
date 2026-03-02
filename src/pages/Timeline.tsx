@@ -16,12 +16,18 @@ function getNodeStatus(progress: number, date: string): NodeStatus {
   return "default";
 }
 
-function getNodeFill(status: NodeStatus, i: number) {
+function getNodeFill(status: NodeStatus, i: number, company?: string) {
+  const isSaudia = company === "saudia";
   if (status === "success") return { fill: "url(#gSuccess)", stroke: "#86efac" };
   if (status === "warning") return { fill: "url(#gWarning)", stroke: "#fcd34d" };
   if (status === "danger")  return { fill: "url(#gDanger)",  stroke: "#fca5a5" };
-  const gold = (i >= 4 && i < 8) || (i >= 12 && i < 16);
-  return gold
+  const useGold = i % 2 === 0;
+  if (isSaudia) {
+    return useGold
+      ? { fill: "url(#gBlue)", stroke: "#ffffff" }
+      : { fill: "url(#gBlue)", stroke: "#8ed6b4" };
+  }
+  return useGold
     ? { fill: "url(#gGold)", stroke: "#fbe48c" }
     : { fill: "url(#gBlue)", stroke: "#5a7ad8" };
 }
@@ -286,7 +292,7 @@ export default function Timeline() {
                   const { node, nodeIdx } = item;
                   const nodeProgress = progressFromTasks(node);
                   const status = getNodeStatus(nodeProgress, node.date);
-                  const { fill, stroke } = getNodeFill(status, nodeIdx);
+                  const { fill, stroke } = getNodeFill(status, nodeIdx, currentCompany);
                   return (
                     <TimelineNode key={`node-${node.id}`} cx={cx} cy={cy}
                       title={node.title} date={node.date}
@@ -299,9 +305,14 @@ export default function Timeline() {
                 // Sub-task: same node look but smaller
                 const { task, nodeIdx: tNodeIdx, taskOrder } = item;
                 const isDone = !!task.is_done;
-                const taskStatus: NodeStatus = isDone ? "success" : "default";
-                const taskFill   = isDone ? "url(#gSuccess)" : getNodeFill(taskStatus, tNodeIdx).fill;
-                const taskStroke = isDone ? "#86efac"        : getNodeFill(taskStatus, tNodeIdx).stroke;
+                const dueTime = new Date(nodes[tNodeIdx]?.date ?? "").getTime();
+                const isOverdue = Number.isFinite(dueTime) && dueTime <= Date.now();
+                const taskStatus: NodeStatus = isDone ? "success" : (isOverdue ? "danger" : "default");
+                const taskFill = getNodeFill("default", tNodeIdx, currentCompany).fill;
+                const taskStroke = getNodeFill("default", tNodeIdx, currentCompany).stroke;
+                const prevItem = trackItems[i - 1];
+                const nextItem = trackItems[i + 1];
+                const adjacentToMainNode = prevItem?.type === "node" || nextItem?.type === "node";
                 return (
                   <TimelineNode
                     key={`task-${task.id}`}
@@ -317,7 +328,12 @@ export default function Timeline() {
                     company={currentCompany}
                     nodeScale={0.58}
                     titlePlacement={taskOrder % 2 === 0 ? "top" : "bottom"}
-                    titleFontScale={1.45}
+                    titleFontScale={1.75}
+                    titleShiftY={adjacentToMainNode ? 5 : 0}
+                    showProgress={false}
+                    showStatusRing={taskStatus !== "default"}
+                    statusRingStatic
+                    animate={false}
                   />
                 );
               })
@@ -325,7 +341,7 @@ export default function Timeline() {
                 const node = nodes[i];
                 const nodeProgress = node.progress;
                 const status = getNodeStatus(nodeProgress, node.date);
-                const { fill, stroke } = getNodeFill(status, i);
+                const { fill, stroke } = getNodeFill(status, i, currentCompany);
                 return (
                   <TimelineNode key={node.id} cx={cx} cy={cy} title={node.title} date={node.date}
                     icon={node.icon} fill={fill} stroke={stroke}

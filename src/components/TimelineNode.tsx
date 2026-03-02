@@ -22,6 +22,16 @@ interface TimelineNodeProps {
   titlePlacement?: "top" | "bottom";
   /** Extra multiplier for title font size only */
   titleFontScale?: number;
+  /** Hide % label under the node */
+  showProgress?: boolean;
+  /** Force showing a status ring (used for sub-tasks) */
+  showStatusRing?: boolean;
+  /** Disable all node animations */
+  animate?: boolean;
+  /** Status ring without spin animation */
+  statusRingStatic?: boolean;
+  /** Vertical nudge for title block (negative moves up) */
+  titleShiftY?: number;
 }
 
 const hijriFormatter = new Intl.DateTimeFormat("ar-SA", {
@@ -55,7 +65,8 @@ const statusRingColor: Record<NodeStatus, string> = {
 
 export default function TimelineNode({
   cx, cy, title, date, icon, fill, stroke, progress, status, index, isCurrent, company,
-  nodeScale = 1, titlePlacement = "top", titleFontScale = 1,
+  nodeScale = 1, titlePlacement = "top", titleFontScale = 1, showProgress = true, showStatusRing = false,
+  animate = true, statusRingStatic = false, titleShiftY = 0,
 }: TimelineNodeProps) {
   const isSaudia = company === "saudia";
   const brandPrimary = isSaudia ? "#046A38" : "#C8AA5D";
@@ -73,14 +84,15 @@ export default function TimelineNode({
   const titleY = titlePlacement === "top"
     ? cy - Math.round(105 * s)
     : cy + Math.round(96 * s);
+  const titlePosY = titleY + titleShiftY;
   const progY  = cy + Math.round(68 * s);
   const fontSize = Math.round(15 * s * titleFontScale);
   const progFs   = Math.round(14 * s);
   const dateFs   = Math.round(14 * s);
 
   return (
-    <g className="timeline-node" style={{ animationDelay: `${index * 0.06}s` }}>
-      <text x={cx} y={titleY} textAnchor="middle">
+    <g className={animate ? "timeline-node" : undefined} style={animate ? { animationDelay: `${index * 0.06}s` } : undefined}>
+      <text x={cx} y={titlePosY} textAnchor="middle">
         <tspan fontSize={fontSize} fontWeight="700" x={cx} dy="0">{line1}</tspan>
         <tspan fontSize={fontSize} fontWeight="700" x={cx} dy="1.4em">{line2}</tspan>
         {hijriDate && (
@@ -96,7 +108,13 @@ export default function TimelineNode({
           style={{ transformOrigin: `${cx}px ${cy}px` }} className="spin-circle" />
       )}
 
-      {(status === "warning" || status === "danger") && (
+      {showStatusRing && (
+        <circle cx={cx} cy={cy} r={Rspin} stroke={ringColor} strokeWidth={5 * s} fill="none"
+          strokeLinecap="round" strokeDasharray={`${50 * s} ${30 * s}`}
+          style={{ transformOrigin: `${cx}px ${cy}px` }} className={statusRingStatic ? undefined : "spin-circle"} />
+      )}
+
+      {!showStatusRing && (status === "warning" || status === "danger") && (
         <>
           <circle cx={cx} cy={cy} r={Rpulse} fill={ringColor} opacity="0.15" className="pulse-ring" />
           <circle cx={cx} cy={cy} r={Rspin} stroke={ringColor} strokeWidth={5 * s} fill="none"
@@ -113,10 +131,12 @@ export default function TimelineNode({
         width={iconSz} height={iconSz}
         href={iconUrl(icon)} style={{ filter: "brightness(0) invert(1)" }} />
 
-      <text x={cx} y={progY} textAnchor="middle"
-        fontSize={progFs} fontWeight="700" fill={textColor}>
-        %{progress}
-      </text>
+      {showProgress && (
+        <text x={cx} y={progY} textAnchor="middle"
+          fontSize={progFs} fontWeight="700" fill={textColor}>
+          %{progress}
+        </text>
+      )}
     </g>
   );
 }
