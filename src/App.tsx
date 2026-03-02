@@ -52,6 +52,15 @@ function CompanyRedirect() {
       let slug = DEFAULT_WORKSHEET_SLUG;
       const { data: sessionData } = await supabase.auth.getSession();
       const uid = sessionData.session?.user?.id;
+      let defaultId: string | null = null;
+
+      const { data: worksheets } = await supabase
+        .from("worksheets")
+        .select("id,slug")
+        .eq("company", currentCompany)
+        .order("created_at", { ascending: true });
+
+      const list = worksheets ?? [];
 
       if (uid) {
         const { data: setting } = await supabase
@@ -61,29 +70,16 @@ function CompanyRedirect() {
           .eq("company", currentCompany)
           .maybeSingle();
 
-        const defaultId = setting?.default_worksheet_id;
-        if (defaultId) {
-          const { data: defaultWorksheet } = await supabase
-            .from("worksheets")
-            .select("slug")
-            .eq("id", defaultId)
-            .eq("company", currentCompany)
-            .maybeSingle();
-
-          if (defaultWorksheet?.slug) slug = defaultWorksheet.slug;
-        }
+        defaultId = setting?.default_worksheet_id ?? null;
       }
 
-      if (slug === DEFAULT_WORKSHEET_SLUG) {
-        const { data: firstWorksheet } = await supabase
-          .from("worksheets")
-          .select("slug")
-          .eq("company", currentCompany)
-          .order("created_at", { ascending: true })
-          .limit(1)
-          .maybeSingle();
-        if (firstWorksheet?.slug) slug = firstWorksheet.slug;
-      }
+      const selected =
+        (defaultId ? list.find((w) => w.id === defaultId) : null)
+        ?? list.find((w) => w.slug === DEFAULT_WORKSHEET_SLUG)
+        ?? list[0]
+        ?? null;
+
+      if (selected?.slug) slug = selected.slug;
 
       if (!cancelled) {
         navigate(`/${currentCompany}/${encodeURIComponent(slug)}`, { replace: true });
