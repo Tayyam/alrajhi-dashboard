@@ -54,13 +54,14 @@ function CompanyRedirect() {
       const uid = sessionData.session?.user?.id;
 
       if (uid) {
-        const { data: profile } = await supabase
-          .from("profiles")
+        const { data: setting } = await supabase
+          .from("settings")
           .select("default_worksheet_id")
-          .eq("id", uid)
+          .eq("user_id", uid)
+          .eq("company", currentCompany)
           .maybeSingle();
 
-        const defaultId = profile?.default_worksheet_id;
+        const defaultId = setting?.default_worksheet_id;
         if (defaultId) {
           const { data: defaultWorksheet } = await supabase
             .from("worksheets")

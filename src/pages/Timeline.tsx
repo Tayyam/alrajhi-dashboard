@@ -33,6 +33,13 @@ function findCurrentIdx(nodes: NodeRow[]) {
   return idx;
 }
 
+function progressFromTasks(node: NodeRow) {
+  const total = node.tasks?.length ?? 0;
+  if (!total) return 0;
+  const done = node.tasks?.filter((t) => t.is_done).length ?? 0;
+  return Math.round((done / total) * 100);
+}
+
 const todayHijri = new Intl.DateTimeFormat("ar-SA", {
   calendar: "islamic-umalqura",
   day: "numeric",
@@ -250,12 +257,13 @@ export default function Timeline() {
 
           {points.map(([cx, cy], i) => {
             const node = nodes[i];
-            const status = getNodeStatus(node.progress, node.date);
+            const nodeProgress = currentCompany === "saudia" ? progressFromTasks(node) : node.progress;
+            const status = getNodeStatus(nodeProgress, node.date);
             const { fill, stroke } = getNodeFill(status, i);
             return (
               <TimelineNode key={node.id} cx={cx} cy={cy} title={node.title} date={node.date}
                 icon={node.icon} fill={fill} stroke={stroke}
-                progress={node.progress} status={status} index={i}
+                progress={nodeProgress} status={status} index={i}
                 isCurrent={i === currentIdx} tasks={node.tasks} company={currentCompany} />
             );
           })}

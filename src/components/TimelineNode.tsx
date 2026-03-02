@@ -104,8 +104,8 @@ export default function TimelineNode({ cx, cy, title, date, icon, fill, stroke, 
         const angle = (i / tasks.length) * 2 * Math.PI - Math.PI / 2;
         const tx = cx + Math.cos(angle) * ORBIT_RADIUS;
         const ty = cy + Math.sin(angle) * ORBIT_RADIUS;
-        const isTaskComplete = task.progress === 100;
-        const taskFill = isTaskComplete ? "#16a34a" : (task.progress > 0 ? (isSaudia ? "#046A38" : "#d97706") : "#6b7280");
+        const isTaskComplete = !!task.is_done;
+        const taskFill = isTaskComplete ? "#16a34a" : (isSaudia ? "#046A38" : "#6b7280");
 
         return (
           <g key={`task-${task.id}`}>
@@ -113,9 +113,9 @@ export default function TimelineNode({ cx, cy, title, date, icon, fill, stroke, 
             {task.icon ? (
               <image x={tx - 8} y={ty - 8} width="16" height="16" href={iconUrl(task.icon)} style={{ filter: "brightness(0) invert(1)" }} />
             ) : (
-              <text x={tx} y={ty + 4} fontSize="10" fill="#fff" textAnchor="middle" fontWeight="bold">{task.progress}%</text>
+              <text x={tx} y={ty + 4} fontSize="10" fill="#fff" textAnchor="middle" fontWeight="bold">{isTaskComplete ? "1" : "0"}</text>
             )}
-            <title>{task.title} - {task.progress}%</title>
+            <title>{task.title} - {isTaskComplete ? "true" : "false"}</title>
           </g>
         );
       })}

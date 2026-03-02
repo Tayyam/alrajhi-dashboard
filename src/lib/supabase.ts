@@ -9,7 +9,8 @@ export interface TaskRow {
   id: number;
   node_id: number;
   title: string;
-  progress: number;
+  is_done: boolean;
+  progress?: number;
   icon?: string | null;
 }
 

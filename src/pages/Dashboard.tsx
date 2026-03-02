@@ -24,8 +24,16 @@ function formatDateAr(dateStr: string) {
   return d.toLocaleDateString("ar-SA-u-nu-latn", { calendar: "islamic-umalqura", day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function buildWorkbook(nodes: NodeRow[]) {
-  const rows = nodes.map((n) => ({ "العنوان": n.title, "التاريخ": n.date, "الأيقونة": n.icon, "نسبة الإكتمال (%)": n.progress }));
+function computeNodeProgress(node: NodeRow, company: string) {
+  if (company !== "saudia") return node.progress;
+  const total = node.tasks?.length ?? 0;
+  if (!total) return 0;
+  const done = node.tasks?.filter((t) => t.is_done).length ?? 0;
+  return Math.round((done / total) * 100);
+}
+
+function buildWorkbook(nodes: NodeRow[], company: string) {
+  const rows = nodes.map((n) => ({ "العنوان": n.title, "التاريخ": n.date, "الأيقونة": n.icon, "نسبة الإكتمال (%)": computeNodeProgress(n, company) }));
   const ws = XLSX.utils.json_to_sheet(rows);
   ws["!cols"] = [{ wch: 45 }, { wch: 14 }, { wch: 16 }, { wch: 18 }];
   const wb = XLSX.utils.book_new();
@@ -43,7 +51,7 @@ function statusBadge(progress: number, date: string) {
 
 function TasksManager({ nodeId, tasks, iconList, msg, onRefresh, primary }: { nodeId: number, tasks: any[], iconList: string[], msg: any, onRefresh: () => void, primary: string }) {
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ title: "", progress: 0, icon: "" });
+  const [form, setForm] = useState({ title: "", is_done: false, icon: "" });
   const [savingTask, setSavingTask] = useState(false);
 
   async function handleAdd() {
@@ -52,11 +60,19 @@ function TasksManager({ nodeId, tasks, iconList, msg, onRefresh, primary }: { no
     const { error } = await supabase.from("timeline_tasks").insert({
       node_id: nodeId,
       title: form.title,
-      progress: form.progress,
+      is_done: form.is_done,
       icon: form.icon || null
     });
     if (error) msg("خطأ: " + error.message, "err");
-    else { msg("تمت إضافة المهمة", "ok"); setForm({ title: "", progress: 0, icon: "" }); setAdding(false); onRefresh(); }
+    else { msg("تمت إضافة المهمة", "ok"); setForm({ title: "", is_done: false, icon: "" }); setAdding(false); onRefresh(); }
+    setSavingTask(false);
+  }
+
+  async function handleToggleDone(taskId: number, currentValue: boolean) {
+    setSavingTask(true);
+    const { error } = await supabase.from("timeline_tasks").update({ is_done: !currentValue }).eq("id", taskId);
+    if (error) msg("خطأ: " + error.message, "err");
+    else onRefresh();
     setSavingTask(false);
   }
 
@@ -78,7 +94,13 @@ function TasksManager({ nodeId, tasks, iconList, msg, onRefresh, primary }: { no
               <div className="flex items-center gap-3">
                 {t.icon && <img src={iconUrl(t.icon)} className="w-6 h-6" alt="" style={{ filter: "brightness(0) invert(1)" }} />}
                 <span className="text-sm font-semibold">{t.title}</span>
-                <span className="text-xs bg-white px-2 py-1 rounded shadow-sm font-bold" style={{ color: primary }}>{t.progress}%</span>
+                <button
+                  onClick={() => handleToggleDone(t.id, !!t.is_done)}
+                  className="text-xs bg-white px-2 py-1 rounded shadow-sm font-bold"
+                  style={{ color: t.is_done ? "#16a34a" : "#ef4444" }}
+                >
+                  {t.is_done ? "true" : "false"}
+                </button>
               </div>
               <button onClick={() => handleDelete(t.id)} className="text-red-500 hover:text-red-700 p-1">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -96,7 +118,10 @@ function TasksManager({ nodeId, tasks, iconList, msg, onRefresh, primary }: { no
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
           <input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="العنوان" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm" style={{ borderColor: "#d1d5db" }} />
           <div className="flex gap-3">
-            <input type="number" min={0} max={100} value={form.progress} onChange={e => setForm({...form, progress: Math.max(0, Math.min(100, Number(e.target.value)))})} placeholder="%" className="w-20 px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm text-center" dir="ltr" />
+            <select value={String(form.is_done)} onChange={e => setForm({ ...form, is_done: e.target.value === "true" })} className="w-28 px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm">
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
             <select value={form.icon} onChange={e => setForm({...form, icon: e.target.value})} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm">
               <option value="">بدون أيقونة</option>
               {iconList.map(ic => <option key={ic} value={ic}>{ic}</option>)}
@@ -231,12 +256,13 @@ export default function Dashboard() {
     let userDefaultWorksheetId: string | null = null;
 
     if (uid) {
-      const { data: profileData } = await supabase
-        .from("profiles")
+      const { data: settingsData } = await supabase
+        .from("settings")
         .select("default_worksheet_id")
-        .eq("id", uid)
+        .eq("user_id", uid)
+        .eq("company", currentCompany)
         .maybeSingle();
-      userDefaultWorksheetId = profileData?.default_worksheet_id ?? null;
+      userDefaultWorksheetId = settingsData?.default_worksheet_id ?? null;
       setDefaultWorksheetId(userDefaultWorksheetId);
     } else {
       setDefaultWorksheetId(null);
@@ -270,9 +296,11 @@ export default function Dashboard() {
 
     setSaving(-1);
     const { error } = await supabase
-      .from("profiles")
-      .update({ default_worksheet_id: currentWorksheet.id })
-      .eq("id", uid);
+      .from("settings")
+      .upsert(
+        { user_id: uid, company: currentCompany, default_worksheet_id: currentWorksheet.id },
+        { onConflict: "user_id,company" },
+      );
 
     if (error) {
       msg("خطأ: " + error.message, "err");
@@ -329,7 +357,10 @@ export default function Dashboard() {
     if (!currentWorksheet) { msg("الـ Worksheet غير محدد", "err"); return; }
     if (!addForm.title || !addForm.date) { msg("يرجى ملء العنوان والتاريخ", "err"); return; }
     setSaving(-1);
-    const { error } = await supabase.from("timeline_nodes").insert({ ...addForm, worksheet_id: currentWorksheet.id });
+    const payload = currentCompany === "saudia"
+      ? { title: addForm.title, date: addForm.date, icon: addForm.icon, progress: 0, worksheet_id: currentWorksheet.id }
+      : { ...addForm, worksheet_id: currentWorksheet.id };
+    const { error } = await supabase.from("timeline_nodes").insert(payload);
     if (error) msg("خطأ: " + error.message, "err");
     else { msg("تمت الإضافة", "ok"); setShowAdd(false); setAddForm(emptyForm); await fetchNodes(currentWorksheet.id); }
     setSaving(null);
@@ -339,9 +370,20 @@ export default function Dashboard() {
     if (!editNode || !editForm.title || !editForm.date) { msg("يرجى ملء العنوان والتاريخ", "err"); return; }
     setSaving(editNode.id);
     const prog = Math.max(0, Math.min(100, editForm.progress));
-    const { error } = await supabase.from("timeline_nodes").update({ title: editForm.title, date: editForm.date, icon: editForm.icon, progress: prog }).eq("id", editNode.id);
+    const updatePayload = currentCompany === "saudia"
+      ? { title: editForm.title, date: editForm.date, icon: editForm.icon }
+      : { title: editForm.title, date: editForm.date, icon: editForm.icon, progress: prog };
+    const { error } = await supabase.from("timeline_nodes").update(updatePayload).eq("id", editNode.id);
     if (error) msg("خطأ: " + error.message, "err");
-    else { setNodes((p) => p.map((n) => n.id === editNode.id ? { ...n, ...editForm, progress: prog } : n)); msg("تم التعديل", "ok"); setEditNode(null); }
+    else {
+      setNodes((p) => p.map((n) => n.id === editNode.id
+        ? (currentCompany === "saudia"
+          ? { ...n, title: editForm.title, date: editForm.date, icon: editForm.icon }
+          : { ...n, ...editForm, progress: prog })
+        : n));
+      msg("تم التعديل", "ok");
+      setEditNode(null);
+    }
     setSaving(null);
   }
 
@@ -390,7 +432,7 @@ export default function Dashboard() {
 
   async function handleBackup() {
     setSaving(-1);
-    const buf = XLSX.write(buildWorkbook(nodes), { type: "array", bookType: "xlsx" });
+    const buf = XLSX.write(buildWorkbook(nodes, currentCompany), { type: "array", bookType: "xlsx" });
     const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     const { error } = await supabase.storage.from("backups").upload(`backup_${ts}.xlsx`, new Blob([buf], { type: mime }), { contentType: mime });
@@ -399,7 +441,7 @@ export default function Dashboard() {
   }
 
   function handleExport() {
-    XLSX.writeFile(buildWorkbook(nodes), "timeline_data.xlsx");
+    XLSX.writeFile(buildWorkbook(nodes, currentCompany), "timeline_data.xlsx");
     msg("تم تصدير الملف", "ok");
   }
 
@@ -563,7 +605,7 @@ export default function Dashboard() {
               tasksToInsert.push({
                 node_id: newNode.id,
                 title: t.title,
-                progress: t.progress,
+                is_done: !!t.is_done,
                 icon: t.icon
               });
             });
@@ -643,12 +685,20 @@ export default function Dashboard() {
             <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm" dir="ltr" />
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">نسبة الإكتمال</label>
-            <input type="number" min={0} max={100} value={form.progress}
-              onChange={(e) => setForm({ ...form, progress: Math.max(0, Math.min(100, Number(e.target.value))) })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm text-center" dir="ltr" />
-          </div>
+          {currentCompany !== "saudia" ? (
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">نسبة الإكتمال</label>
+              <input type="number" min={0} max={100} value={form.progress}
+                onChange={(e) => setForm({ ...form, progress: Math.max(0, Math.min(100, Number(e.target.value))) })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm text-center" dir="ltr" />
+            </div>
+          ) : (
+            <div className="flex items-end">
+              <div className="w-full px-3 py-2 border border-dashed border-gray-300 rounded-xl text-xs text-gray-500">
+                نسبة الإكتمال تُحسب تلقائيًا من المهام الفرعية.
+              </div>
+            </div>
+          )}
         </div>
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1">الأيقونة</label>
@@ -1072,7 +1122,9 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {nodes.map((node, idx) => (
+                  {nodes.map((node, idx) => {
+                    const nodeProgress = computeNodeProgress(node, currentCompany);
+                    return (
                     <tr key={node.id} className={`border-b border-gray-100 hover:bg-gray-50/50 transition ${saving === node.id ? "opacity-50" : ""}`}>
                       <td className="px-4 py-3 whitespace-nowrap"><span className="text-gray-400 font-mono text-xs">{idx + 1}</span></td>
                       <td className="px-4 py-3 font-medium whitespace-nowrap">{node.title}</td>
@@ -1087,15 +1139,15 @@ export default function Dashboard() {
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                             <div className="h-full rounded-full transition-all"
-                              style={{ width: `${node.progress}%`, backgroundColor: node.progress === 100 ? "#22c55e" : node.progress > 50 ? themeS : "#ef4444" }} />
+                              style={{ width: `${nodeProgress}%`, backgroundColor: nodeProgress === 100 ? "#22c55e" : nodeProgress > 50 ? themeS : "#ef4444" }} />
                           </div>
-                          <span className="text-xs text-gray-500 font-mono w-8 text-left" dir="ltr">{node.progress}%</span>
+                          <span className="text-xs text-gray-500 font-mono w-8 text-left" dir="ltr">{nodeProgress}%</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">{statusBadge(node.progress, node.date)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{statusBadge(nodeProgress, node.date)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => { setEditNode(node); setEditForm({ title: node.title, date: node.date, icon: node.icon, progress: node.progress }); }}
+                          <button onClick={() => { setEditNode(node); setEditForm({ title: node.title, date: node.date, icon: node.icon, progress: nodeProgress }); }}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-[#1E4483] hover:bg-blue-50 transition cursor-pointer" title="تعديل">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                           </button>
@@ -1106,7 +1158,7 @@ export default function Dashboard() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>

@@ -7,11 +7,8 @@ create table if not exists public.profiles (
   id uuid references auth.users on delete cascade primary key,
   email text not null,
   role text not null default 'user' check (role in ('admin', 'user')),
-  default_worksheet_id uuid,
   created_at timestamptz not null default now()
 );
-
-alter table public.profiles add column if not exists default_worksheet_id uuid;
 
 alter table public.profiles enable row level security;
 
@@ -92,10 +89,6 @@ alter table public.worksheets enable row level security;
 alter table public.worksheets add column if not exists label text;
 alter table public.worksheets add column if not exists country text;
 alter table public.worksheets add column if not exists company text not null default 'alrajhi';
-alter table public.profiles drop constraint if exists profiles_default_worksheet_id_fkey;
-alter table public.profiles
-  add constraint profiles_default_worksheet_id_fkey
-  foreign key (default_worksheet_id) references public.worksheets(id) on delete set null;
 drop index if exists worksheets_slug_key;
 create unique index if not exists worksheets_company_slug_key on public.worksheets (company, slug);
 
@@ -133,7 +126,37 @@ on conflict (company, slug) do update set
   country = excluded.country;
 
 -- ============================================
--- 3. Timeline nodes table
+-- 3. User settings table
+-- ============================================
+create table if not exists public.settings (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  company text not null,
+  default_worksheet_id uuid references public.worksheets(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, company)
+);
+
+alter table public.settings enable row level security;
+
+drop policy if exists "Users can read own settings" on public.settings;
+create policy "Users can read own settings"
+  on public.settings for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own settings" on public.settings;
+create policy "Users can insert own settings"
+  on public.settings for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update own settings" on public.settings;
+create policy "Users can update own settings"
+  on public.settings for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+
+-- ============================================
+-- 4. Timeline nodes table
 -- ============================================
 create table if not exists public.timeline_nodes (
   id bigint generated always as identity primary key,
@@ -185,5 +208,36 @@ create policy "Admins can manage timeline nodes"
 drop policy if exists "Authenticated users can manage timeline nodes" on public.timeline_nodes;
 create policy "Authenticated users can manage timeline nodes"
   on public.timeline_nodes for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+-- ============================================
+-- 5. Timeline tasks table (Saudia sub-tasks)
+-- ============================================
+create table if not exists public.timeline_tasks (
+  id bigint generated always as identity primary key,
+  node_id bigint references public.timeline_nodes(id) on delete cascade,
+  title text not null,
+  is_done boolean not null default false,
+  icon text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.timeline_tasks enable row level security;
+alter table public.timeline_tasks add column if not exists is_done boolean not null default false;
+
+drop policy if exists "Anyone can read timeline tasks" on public.timeline_tasks;
+create policy "Anyone can read timeline tasks"
+  on public.timeline_tasks for select
+  using (true);
+
+drop policy if exists "Admins can manage timeline tasks" on public.timeline_tasks;
+create policy "Admins can manage timeline tasks"
+  on public.timeline_tasks for all
+  using (public.is_admin(auth.uid()));
+
+drop policy if exists "Authenticated users can manage timeline tasks" on public.timeline_tasks;
+create policy "Authenticated users can manage timeline tasks"
+  on public.timeline_tasks for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
