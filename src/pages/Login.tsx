@@ -12,7 +12,7 @@ export default function Login() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate("/dashboard", { replace: true });
+      if (data.session) navigate("/alrajhi/dashboard", { replace: true });
       else setChecking(false);
     });
   }, []);
@@ -24,7 +24,7 @@ export default function Login() {
     const { error: err } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (err) { setError(err.message); return; }
-    navigate("/dashboard");
+    navigate("/alrajhi/dashboard");
   }
 
   if (checking) {

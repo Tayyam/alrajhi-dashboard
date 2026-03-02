@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { supabase, iconUrl, LOGO, BG_KEY, type NodeRow, type WorksheetRow } from "../lib/supabase";
+import { supabase, iconUrl, BG_KEY, getCompanyBrand, type NodeRow, type WorksheetRow } from "../lib/supabase";
 import * as XLSX from "xlsx";
 import { decodeWorksheetSlug, DEFAULT_WORKSHEET_SLUG, makeWorksheetSlug } from "../lib/worksheets";
 
-const P = "#1E4483";
 const S = "#B99A57";
 const emptyForm = { title: "", date: "", icon: "document", progress: 0 };
 const emptyAccount = { email: "", password: "", role: "user" as "admin" | "user" };
@@ -41,6 +40,77 @@ function statusBadge(progress: number, date: string) {
   return <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">قادم</span>;
 }
 
+function TasksManager({ nodeId, tasks, iconList, msg, onRefresh, primary }: { nodeId: number, tasks: any[], iconList: string[], msg: any, onRefresh: () => void, primary: string }) {
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({ title: "", progress: 0, icon: "" });
+  const [savingTask, setSavingTask] = useState(false);
+
+  async function handleAdd() {
+    if (!form.title) { msg("يرجى إدخال العنوان", "err"); return; }
+    setSavingTask(true);
+    const { error } = await supabase.from("timeline_tasks").insert({
+      node_id: nodeId,
+      title: form.title,
+      progress: form.progress,
+      icon: form.icon || null
+    });
+    if (error) msg("خطأ: " + error.message, "err");
+    else { msg("تمت إضافة المهمة", "ok"); setForm({ title: "", progress: 0, icon: "" }); setAdding(false); onRefresh(); }
+    setSavingTask(false);
+  }
+
+  async function handleDelete(taskId: number) {
+    if (!confirm("تأكيد الحذف؟")) return;
+    setSavingTask(true);
+    const { error } = await supabase.from("timeline_tasks").delete().eq("id", taskId);
+    if (error) msg("خطأ: " + error.message, "err");
+    else { msg("تم الحذف", "ok"); onRefresh(); }
+    setSavingTask(false);
+  }
+
+  return (
+    <div className="space-y-4">
+      {tasks.length > 0 ? (
+        <div className="space-y-2">
+          {tasks.map(t => (
+            <div key={t.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg border border-gray-100">
+              <div className="flex items-center gap-3">
+                {t.icon && <img src={iconUrl(t.icon)} className="w-6 h-6" alt="" style={{ filter: "brightness(0) invert(1)" }} />}
+                <span className="text-sm font-semibold">{t.title}</span>
+                <span className="text-xs bg-white px-2 py-1 rounded shadow-sm font-bold" style={{ color: primary }}>{t.progress}%</span>
+              </div>
+              <button onClick={() => handleDelete(t.id)} className="text-red-500 hover:text-red-700 p-1">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : <p className="text-sm text-gray-500 text-center">لا توجد مهام</p>}
+      
+      {!adding ? (
+        <button onClick={() => setAdding(true)} className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm font-semibold text-gray-600 transition" style={{ borderColor: "#d1d5db" }}>
+          + إضافة مهمة فرعية
+        </button>
+      ) : (
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+          <input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="العنوان" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm" style={{ borderColor: "#d1d5db" }} />
+          <div className="flex gap-3">
+            <input type="number" min={0} max={100} value={form.progress} onChange={e => setForm({...form, progress: Math.max(0, Math.min(100, Number(e.target.value)))})} placeholder="%" className="w-20 px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm text-center" dir="ltr" />
+            <select value={form.icon} onChange={e => setForm({...form, icon: e.target.value})} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm">
+              <option value="">بدون أيقونة</option>
+              {iconList.map(ic => <option key={ic} value={ic}>{ic}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleAdd} disabled={savingTask} className="flex-1 py-2 text-white rounded-lg text-sm font-bold disabled:opacity-50" style={{ background: primary }}>حفظ</button>
+            <button onClick={() => setAdding(false)} className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-bold">إلغاء</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function toIsoDate(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
     const parsed = XLSX.SSF.parse_date_code(value);
@@ -62,7 +132,11 @@ function toIsoDate(value: unknown) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { worksheetSlug } = useParams();
+  const { company, worksheetSlug } = useParams();
+  const currentCompany = company || "alrajhi";
+  const brand = getCompanyBrand(currentCompany);
+  const themeP = brand.primary;
+  const themeS = currentCompany === "saudia" ? "#046A38" : S;
   const resolvedSlug = decodeWorksheetSlug(worksheetSlug || DEFAULT_WORKSHEET_SLUG);
   const [nodes, setNodes] = useState<NodeRow[]>([]);
   const [worksheets, setWorksheets] = useState<WorksheetRow[]>([]);
@@ -103,7 +177,7 @@ export default function Dashboard() {
     checkAuth();
     fetchWorksheets();
     fetchIcons();
-  }, [resolvedSlug]);
+  }, [resolvedSlug, currentCompany]);
 
   useEffect(() => {
     if (!currentWorksheet?.id) return;
@@ -112,13 +186,22 @@ export default function Dashboard() {
     const ch = supabase
       .channel(`dashboard-rt-${currentWorksheet.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "timeline_nodes", filter: `worksheet_id=eq.${currentWorksheet.id}` }, ({ new: n }) => {
-        setNodes((prev) => prev.some((x) => x.id === (n as NodeRow).id) ? prev : [...prev, n as NodeRow].sort((a, b) => a.date.localeCompare(b.date)));
+        setNodes((prev) => prev.some((x) => x.id === (n as NodeRow).id) ? prev : [...prev, { ...n as NodeRow, tasks: [] }].sort((a, b) => a.date.localeCompare(b.date)));
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "timeline_nodes", filter: `worksheet_id=eq.${currentWorksheet.id}` }, ({ new: n }) => {
-        setNodes((prev) => prev.map((x) => x.id === (n as NodeRow).id ? (n as NodeRow) : x));
+        setNodes((prev) => prev.map((x) => x.id === (n as NodeRow).id ? { ...x, ...n as NodeRow } : x));
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "timeline_nodes", filter: `worksheet_id=eq.${currentWorksheet.id}` }, ({ old: o }) => {
         setNodes((prev) => prev.filter((x) => x.id !== (o as NodeRow).id));
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "timeline_tasks" }, ({ new: n }) => {
+        setNodes((prev) => prev.map(node => node.id === n.node_id ? { ...node, tasks: [...(node.tasks || []), n as any] } : node));
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "timeline_tasks" }, ({ new: n }) => {
+        setNodes((prev) => prev.map(node => node.id === n.node_id ? { ...node, tasks: (node.tasks || []).map(t => t.id === n.id ? n as any : t) } : node));
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "timeline_tasks" }, ({ old: o }) => {
+        setNodes((prev) => prev.map(node => ({ ...node, tasks: (node.tasks || []).filter(t => t.id !== o.id) })));
       })
       .subscribe();
 
@@ -140,7 +223,7 @@ export default function Dashboard() {
   }
 
   async function fetchWorksheets() {
-    const { data, error } = await supabase.from("worksheets").select("id,name,slug,label,country").order("created_at", { ascending: true });
+    const { data, error } = await supabase.from("worksheets").select("id,name,slug,label,country,company").eq("company", currentCompany).order("created_at", { ascending: true });
     if (error) {
       msg(error.message, "err");
       setLoading(false);
@@ -151,14 +234,14 @@ export default function Dashboard() {
     const selected = list.find((w) => w.slug === resolvedSlug) ?? list.find((w) => w.slug === DEFAULT_WORKSHEET_SLUG) ?? list[0] ?? null;
     setCurrentWorksheet(selected);
     if (selected && selected.slug !== resolvedSlug) {
-      navigate(`/dashboard/${encodeURIComponent(selected.slug)}`, { replace: true });
+      navigate(`/${currentCompany}/dashboard/${encodeURIComponent(selected.slug)}`, { replace: true });
     }
     if (!selected) setLoading(false);
   }
 
   async function fetchNodes(worksheetId: string) {
     setLoading(true);
-    const { data, error } = await supabase.from("timeline_nodes").select("*").eq("worksheet_id", worksheetId).order("date", { ascending: true });
+    const { data, error } = await supabase.from("timeline_nodes").select("*, tasks:timeline_tasks(*)").eq("worksheet_id", worksheetId).order("date", { ascending: true });
     if (error) msg(error.message, "err"); else if (data) setNodes(data as NodeRow[]);
     setLoading(false);
   }
@@ -343,9 +426,9 @@ export default function Dashboard() {
       .from("worksheets")
       .insert({ name, slug, label, country })
       .select("id,name,slug,label,country")
-      .single();
+      .maybeSingle();
     if (error || !data) {
-      msg("خطأ: " + (error?.message ?? "تعذر إنشاء Worksheet"), "err");
+      msg("خطأ: " + (error?.message ?? "لا تملك صلاحية إنشاء Worksheet"), "err");
       setSaving(null);
       return;
     }
@@ -353,7 +436,7 @@ export default function Dashboard() {
     setShowWorksheetCreate(false);
     setWorksheetForm(emptyWorksheetForm);
     await fetchWorksheets();
-    navigate(`/dashboard/${encodeURIComponent(data.slug)}`);
+    navigate(`/${currentCompany}/dashboard/${encodeURIComponent(data.slug)}`);
     setSaving(null);
   }
 
@@ -372,10 +455,10 @@ export default function Dashboard() {
       .update({ name, slug, label, country })
       .eq("id", currentWorksheet.id)
       .select("id,name,slug,label,country")
-      .single();
+      .maybeSingle();
 
     if (error || !data) {
-      msg("خطأ: " + (error?.message ?? "تعذر تعديل Worksheet"), "err");
+      msg("خطأ: " + (error?.message ?? "لا تملك صلاحية تعديل Worksheet"), "err");
       setSaving(null);
       return;
     }
@@ -384,7 +467,7 @@ export default function Dashboard() {
     setShowWorksheetRename(false);
     setWorksheetRenameForm(emptyWorksheetRenameForm);
     await fetchWorksheets();
-    navigate(`/dashboard/${encodeURIComponent(data.slug)}`);
+    navigate(`/${currentCompany}/dashboard/${encodeURIComponent(data.slug)}`);
     setSaving(null);
   }
 
@@ -403,10 +486,10 @@ export default function Dashboard() {
       .from("worksheets")
       .insert({ name, slug, label, country })
       .select("id,name,slug,label,country")
-      .single();
+      .maybeSingle();
 
     if (createErr || !created) {
-      msg("خطأ: " + (createErr?.message ?? "تعذر إنشاء Worksheet المنسوخ"), "err");
+      msg("خطأ: " + (createErr?.message ?? "لا تملك صلاحية نسخ Worksheet"), "err");
       setSaving(null);
       return;
     }
@@ -420,9 +503,28 @@ export default function Dashboard() {
     }));
 
     if (copiedNodes.length > 0) {
-      const { error: copyErr } = await supabase.from("timeline_nodes").insert(copiedNodes);
+      const { data: insertedNodes, error: copyErr } = await supabase.from("timeline_nodes").insert(copiedNodes).select();
       if (copyErr) {
         msg("تم إنشاء Worksheet لكن فشل نسخ بعض المهام: " + copyErr.message, "err");
+      } else if (insertedNodes && currentCompany === "saudia") {
+        // copy tasks
+        const tasksToInsert: any[] = [];
+        insertedNodes.forEach((newNode, idx) => {
+          const oldNode = nodes[idx];
+          if (oldNode.tasks && oldNode.tasks.length > 0) {
+            oldNode.tasks.forEach(t => {
+              tasksToInsert.push({
+                node_id: newNode.id,
+                title: t.title,
+                progress: t.progress,
+                icon: t.icon
+              });
+            });
+          }
+        });
+        if (tasksToInsert.length > 0) {
+          await supabase.from("timeline_tasks").insert(tasksToInsert);
+        }
       }
     }
 
@@ -430,7 +532,7 @@ export default function Dashboard() {
     setShowWorksheetDuplicate(false);
     setWorksheetDuplicateForm(emptyWorksheetDuplicateForm);
     await fetchWorksheets();
-    navigate(`/dashboard/${encodeURIComponent(created.slug)}`);
+    navigate(`/${currentCompany}/dashboard/${encodeURIComponent(created.slug)}`);
     setSaving(null);
   }
 
@@ -457,7 +559,7 @@ export default function Dashboard() {
     setShowWorksheetDelete(false);
 
     if (next) {
-      navigate(`/dashboard/${encodeURIComponent(next.slug)}`, { replace: true });
+      navigate(`/${currentCompany}/dashboard/${encodeURIComponent(next.slug)}`, { replace: true });
     }
     msg("تم حذف Worksheet", "ok");
     setSaving(null);
@@ -467,7 +569,7 @@ export default function Dashboard() {
     if (!worksheets.length) { msg("لا توجد Worksheets لنسخ روابطها", "err"); return; }
     const base = window.location.origin;
     const content = worksheets
-      .map((w) => `${worksheetLabelText(w)}: ${base}/${encodeURIComponent(w.slug)}`)
+      .map((w) => `${worksheetLabelText(w)}: ${base}/${currentCompany}/${encodeURIComponent(w.slug)}`)
       .join("\n");
 
     try {
@@ -510,7 +612,7 @@ export default function Dashboard() {
             </select>
             <img src={iconUrl(form.icon)} alt="" className="w-8 h-8 rounded-lg bg-gray-100 p-1" />
           </div>
-          <label className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition" style={{ background: `${S}22`, color: S }}>
+          <label className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition" style={{ background: `${themeS}22`, color: themeS }}>
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 6l-4-4m0 0L8 6m4-4v13" /></svg>
             رفع أيقونة جديدة
             <input ref={ref} type="file" accept="image/png" className="hidden"
@@ -527,11 +629,11 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50" dir="rtl">
-      <header className="sticky top-0 z-30 border-b border-gray-200" style={{ background: P }}>
+      <header className="sticky top-0 z-30 border-b border-gray-200" style={{ background: themeP }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="bg-white rounded-lg px-2 py-1 flex items-center cursor-pointer" onClick={() => navigate(`/${encodeURIComponent(currentWorksheet?.slug ?? DEFAULT_WORKSHEET_SLUG)}`)}>
-              <img src={LOGO} alt="Logo" className="h-9 object-contain" />
+            <div className="bg-white rounded-lg px-2 py-1 flex items-center cursor-pointer" onClick={() => navigate(`/${currentCompany}/${encodeURIComponent(currentWorksheet?.slug ?? DEFAULT_WORKSHEET_SLUG)}`)}>
+              <img src={brand.logo} alt="Logo" className="h-9 object-contain" />
             </div>
             <div className="hidden sm:block">
               <h1 className="text-base font-bold text-white">لوحة التحكم</h1>
@@ -542,12 +644,12 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             <select
               value={currentWorksheet?.slug ?? ""}
-              onChange={(e) => navigate(`/dashboard/${encodeURIComponent(e.target.value)}`)}
+              onChange={(e) => navigate(`/${currentCompany}/dashboard/${encodeURIComponent(e.target.value)}`)}
               className="px-3 py-2 rounded-lg text-sm font-semibold bg-white text-[#1E4483] outline-none border border-white/30 min-w-52"
             >
               {worksheets.map((w) => <option key={w.id} value={w.slug}>{w.country ? `${worksheetLabelText(w)} (${w.country})` : worksheetLabelText(w)}</option>)}
             </select>
-            <button onClick={() => setShowAdd(true)} className={`${btn} text-white`} style={{ background: S }}>
+            <button onClick={() => setShowAdd(true)} className={`${btn} text-white`} style={{ background: themeS }}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
               <span className="hidden sm:inline">إضافة مهمة</span>
             </button>
@@ -560,7 +662,7 @@ export default function Dashboard() {
               {showMenu && (
                 <div className="absolute left-0 top-full mt-1 w-64 bg-white rounded-xl shadow-xl border border-gray-200 py-1 z-50" dir="rtl">
                   <MenuItem icon="M17 8l4 4m0 0l-4 4m4-4H3" label="الصفحة الرئيسية"
-                    onClick={() => { navigate(`/${encodeURIComponent(currentWorksheet?.slug ?? DEFAULT_WORKSHEET_SLUG)}`); setShowMenu(false); }} />
+                    onClick={() => { navigate(`/${currentCompany}/${encodeURIComponent(currentWorksheet?.slug ?? DEFAULT_WORKSHEET_SLUG)}`); setShowMenu(false); }} />
                   <hr className="border-gray-100 my-1" />
                   <MenuItem icon="M12 4v16m8-8H4" label="Worksheet جديد"
                     onClick={() => { setShowWorksheetCreate(true); setShowMenu(false); }} />
@@ -616,13 +718,13 @@ export default function Dashboard() {
 
       {toast && (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl shadow-lg text-sm font-semibold text-white`}
-          style={{ background: toast.type === "ok" ? P : "#dc2626" }}>{toast.msg}</div>
+          style={{ background: toast.type === "ok" ? themeP : "#dc2626" }}>{toast.msg}</div>
       )}
 
       {saving === -1 && (
         <div className="fixed inset-0 z-40 bg-black/30 flex items-center justify-center">
           <div className="bg-white rounded-2xl px-8 py-6 shadow-xl text-center">
-            <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-3" style={{ borderColor: `${P} transparent ${P} ${P}` }} />
+            <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-3" style={{ borderColor: `${themeP} transparent ${themeP} ${themeP}` }} />
             <p className="text-sm font-semibold text-gray-700">جاري المعالجة...</p>
           </div>
         </div>
@@ -631,7 +733,7 @@ export default function Dashboard() {
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="إضافة مهمة جديدة">
         {formFields(addForm, setAddForm, addIconRef)}
         <div className="flex gap-3 mt-6">
-          <button onClick={handleAdd} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: P }}>إضافة</button>
+          <button onClick={handleAdd} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: themeP }}>إضافة</button>
           <button onClick={() => { setShowAdd(false); setAddForm(emptyForm); }} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
         </div>
       </Modal>
@@ -639,9 +741,25 @@ export default function Dashboard() {
       <Modal open={!!editNode} onClose={() => setEditNode(null)} title="تعديل المهمة">
         {formFields(editForm, setEditForm, editIconRef, editNode?.icon)}
         <div className="flex gap-3 mt-6">
-          <button onClick={handleEdit} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: P }}>حفظ التعديلات</button>
+          <button onClick={handleEdit} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: themeP }}>حفظ التعديلات</button>
           <button onClick={() => setEditNode(null)} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
         </div>
+
+        {currentCompany === "saudia" && editNode && (
+          <div className="mt-8 pt-6 border-t border-gray-200">
+             <h3 className="font-bold text-[#1E4483] mb-4">المهام الفرعية</h3>
+             <TasksManager 
+               nodeId={editNode.id} 
+               tasks={(nodes.find(n => n.id === editNode.id)?.tasks) || editNode.tasks || []} 
+               iconList={iconList} 
+               msg={msg} 
+               primary={themeP}
+               onRefresh={() => {
+                 if (currentWorksheet) fetchNodes(currentWorksheet.id);
+               }} 
+             />
+          </div>
+        )}
       </Modal>
 
       <ConfirmModal open={deleteId !== null} onClose={() => setDeleteId(null)} onConfirm={handleDelete}
@@ -678,7 +796,7 @@ export default function Dashboard() {
         <div className="flex gap-3 mt-5">
           <button onClick={confirmIconUpload}
             disabled={!iconName || !/^[a-z][a-z0-9-]*$/.test(iconName)}
-            className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer disabled:opacity-40" style={{ background: P }}>رفع الأيقونة</button>
+            className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer disabled:opacity-40" style={{ background: themeP }}>رفع الأيقونة</button>
           <button onClick={() => { setPendingIcon(null); setIconName(""); }} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
         </div>
       </Modal>
@@ -705,7 +823,7 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="flex gap-3 mt-6">
-          <button onClick={handleAddAccount} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: P }}>إنشاء الحساب</button>
+          <button onClick={handleAddAccount} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: themeP }}>إنشاء الحساب</button>
           <button onClick={() => { setShowAccount(false); setAccountForm(emptyAccount); }} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
         </div>
       </Modal>
@@ -748,7 +866,7 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-3 mt-6">
-          <button onClick={handleCreateWorksheet} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: P }}>إنشاء</button>
+          <button onClick={handleCreateWorksheet} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: themeP }}>إنشاء</button>
           <button onClick={() => { setShowWorksheetCreate(false); setWorksheetForm(emptyWorksheetForm); }} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
         </div>
       </Modal>
@@ -791,7 +909,7 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-3 mt-6">
-          <button onClick={handleRenameWorksheet} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: P }}>حفظ</button>
+          <button onClick={handleRenameWorksheet} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: themeP }}>حفظ</button>
           <button onClick={() => { setShowWorksheetRename(false); setWorksheetRenameForm(emptyWorksheetRenameForm); }} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
         </div>
       </Modal>
@@ -834,7 +952,7 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-3 mt-6">
-          <button onClick={handleDuplicateWorksheet} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: P }}>نسخ</button>
+          <button onClick={handleDuplicateWorksheet} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: themeP }}>نسخ</button>
           <button onClick={() => { setShowWorksheetDuplicate(false); setWorksheetDuplicateForm(emptyWorksheetDuplicateForm); }} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
         </div>
       </Modal>
@@ -869,7 +987,7 @@ export default function Dashboard() {
             onClick={() => { if (importFile) handleImport(importFile); }}
             disabled={!importFile}
             className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer disabled:opacity-40"
-            style={{ background: P }}
+            style={{ background: themeP }}
           >
             رفع الملف
           </button>
@@ -879,14 +997,14 @@ export default function Dashboard() {
       <main className="mx-auto px-4 sm:px-6 py-6">
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${P} transparent ${P} ${P}` }} />
+            <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${themeP} transparent ${themeP} ${themeP}` }} />
           </div>
         ) : (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ background: `${P}08` }} className="border-b border-gray-200">
+                  <tr style={{ background: `${themeP}08` }} className="border-b border-gray-200">
                     <th className="px-4 py-3 text-right font-bold text-gray-600 w-12">#</th>
                     <th className="px-4 py-3 text-right font-bold text-gray-600 w-full">العنوان</th>
                     <th className="px-4 py-3 text-right font-bold text-gray-600 w-32">التاريخ</th>
@@ -912,7 +1030,7 @@ export default function Dashboard() {
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                             <div className="h-full rounded-full transition-all"
-                              style={{ width: `${node.progress}%`, backgroundColor: node.progress === 100 ? "#22c55e" : node.progress > 50 ? S : "#ef4444" }} />
+                              style={{ width: `${node.progress}%`, backgroundColor: node.progress === 100 ? "#22c55e" : node.progress > 50 ? themeS : "#ef4444" }} />
                           </div>
                           <span className="text-xs text-gray-500 font-mono w-8 text-left" dir="ltr">{node.progress}%</span>
                         </div>
@@ -935,9 +1053,9 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
-            <div className="px-4 py-3 border-t border-gray-200 text-xs text-gray-500 flex items-center justify-between" style={{ background: `${P}05` }}>
+            <div className="px-4 py-3 border-t border-gray-200 text-xs text-gray-500 flex items-center justify-between" style={{ background: `${themeP}05` }}>
               <span>إجمالي: <b>{nodes.length}</b> مهمة</span>
-              <span style={{ color: S }}>اضغط على زر التعديل لتحرير المهمة</span>
+              <span style={{ color: themeS }}>اضغط على زر التعديل لتحرير المهمة</span>
             </div>
           </div>
         )}

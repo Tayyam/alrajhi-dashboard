@@ -1,4 +1,4 @@
-import { iconUrl } from "../lib/supabase";
+import { iconUrl, type TaskRow } from "../lib/supabase";
 
 export type NodeStatus = "success" | "warning" | "danger" | "default";
 
@@ -14,6 +14,7 @@ interface TimelineNodeProps {
   status: NodeStatus;
   index: number;
   isCurrent: boolean;
+  tasks?: TaskRow[];
 }
 
 const hijriFormatter = new Intl.DateTimeFormat("ar-SA", {
@@ -45,14 +46,24 @@ const statusRingColor: Record<NodeStatus, string> = {
   default: "#C8AA5D",
 };
 
-export default function TimelineNode({ cx, cy, title, date, icon, fill, stroke, progress, status, index, isCurrent }: TimelineNodeProps) {
+export default function TimelineNode({ cx, cy, title, date, icon, fill, stroke, progress, status, index, isCurrent, tasks }: TimelineNodeProps) {
   const hijriDate = toHijri(date);
   const textColor = statusTextColor[status];
   const ringColor = statusRingColor[status];
   const [line1, line2] = splitTitle(title);
 
+  const ORBIT_RADIUS = 85;
+
   return (
     <g className="timeline-node" style={{ animationDelay: `${index * 0.06}s` }}>
+      {/* Draw task connection lines first so they are under the main node */}
+      {tasks && tasks.length > 0 && tasks.map((task, i) => {
+        const angle = (i / tasks.length) * 2 * Math.PI - Math.PI / 2;
+        const tx = cx + Math.cos(angle) * ORBIT_RADIUS;
+        const ty = cy + Math.sin(angle) * ORBIT_RADIUS;
+        return <line key={`line-${task.id}`} x1={cx} y1={cy} x2={tx} y2={ty} stroke="#cbd5e1" strokeWidth="2" strokeDasharray="4 2" />;
+      })}
+
       <text x={cx} y={cy - 105} textAnchor="middle">
         <tspan fontSize="15" fontWeight="700" x={cx} dy="0">{line1}</tspan>
         <tspan fontSize="15" fontWeight="700" x={cx} dy="1.4em">{line2}</tspan>
@@ -84,6 +95,27 @@ export default function TimelineNode({ cx, cy, title, date, icon, fill, stroke, 
         fontSize="14" fontWeight="700" fill={textColor}>
         %{progress}
       </text>
+
+      {/* Draw tasks */}
+      {tasks && tasks.length > 0 && tasks.map((task, i) => {
+        const angle = (i / tasks.length) * 2 * Math.PI - Math.PI / 2;
+        const tx = cx + Math.cos(angle) * ORBIT_RADIUS;
+        const ty = cy + Math.sin(angle) * ORBIT_RADIUS;
+        const isTaskComplete = task.progress === 100;
+        const taskFill = isTaskComplete ? "#16a34a" : (task.progress > 0 ? "#d97706" : "#6b7280");
+
+        return (
+          <g key={`task-${task.id}`}>
+            <circle cx={tx} cy={ty} r="16" fill={taskFill} stroke="#fff" strokeWidth="2" filter="url(#fShadow)" />
+            {task.icon ? (
+              <image x={tx - 8} y={ty - 8} width="16" height="16" href={iconUrl(task.icon)} style={{ filter: "brightness(0) invert(1)" }} />
+            ) : (
+              <text x={tx} y={ty + 4} fontSize="10" fill="#fff" textAnchor="middle" fontWeight="bold">{task.progress}%</text>
+            )}
+            <title>{task.title} - {task.progress}%</title>
+          </g>
+        );
+      })}
     </g>
   );
 }

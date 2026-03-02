@@ -5,6 +5,14 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5c
 
 export const supabase = createClient(url, key);
 
+export interface TaskRow {
+  id: number;
+  node_id: number;
+  title: string;
+  progress: number;
+  icon?: string | null;
+}
+
 export interface NodeRow {
   id: number;
   title: string;
@@ -12,6 +20,7 @@ export interface NodeRow {
   icon: string;
   progress: number;
   worksheet_id: string;
+  tasks?: TaskRow[];
 }
 
 export interface WorksheetRow {
@@ -20,6 +29,7 @@ export interface WorksheetRow {
   slug: string;
   label?: string | null;
   country?: string | null;
+  company: string;
 }
 
 const render = (bucket: string, path: string, opts: string) =>
@@ -29,3 +39,25 @@ export const iconUrl = (name: string) => render("icons", `${name}.png`, "width=6
 export const bgUrl = () => render("assets", "background.jpeg", "width=1920&quality=90");
 export const LOGO = "/logorajhi.webp";
 export const BG_KEY = "background.jpeg";
+
+export interface CompanyBrand {
+  primary: string;
+  secondary: string;
+  logo: string;
+}
+
+export function getCompanyBrand(company?: string): CompanyBrand {
+  if (company === "saudia") {
+    return {
+      primary: "#046A38",
+      secondary: "#FFFEFF",
+      logo: "/logosaudia.jpg",
+    };
+  }
+
+  return {
+    primary: "#1E4483",
+    secondary: "#B99A57",
+    logo: LOGO,
+  };
+}

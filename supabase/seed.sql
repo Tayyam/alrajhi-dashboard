@@ -12,18 +12,40 @@ create table if not exists public.profiles (
 
 alter table public.profiles enable row level security;
 
+drop policy if exists "Users can read own profile" on public.profiles;
 create policy "Users can read own profile"
   on public.profiles for select
   using (auth.uid() = id);
 
+create or replace function public.is_admin(uid uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = uid and role = 'admin'
+  );
+$$;
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select public.is_admin(auth.uid());
+$$;
+
+grant execute on function public.is_admin(uuid) to authenticated, anon;
+grant execute on function public.is_admin() to authenticated, anon;
+
+drop policy if exists "Admins can read all profiles" on public.profiles;
 create policy "Admins can read all profiles"
   on public.profiles for select
-  using (
-    exists (
-      select 1 from public.profiles
-      where id = auth.uid() and role = 'admin'
-    )
-  );
+  using (public.is_admin(auth.uid()));
 
 -- Auto-create profile on signup
 create or replace function public.handle_new_user()
@@ -68,12 +90,13 @@ create policy "Anyone can read worksheets"
 drop policy if exists "Admins can manage worksheets" on public.worksheets;
 create policy "Admins can manage worksheets"
   on public.worksheets for all
-  using (
-    exists (
-      select 1 from public.profiles
-      where id = auth.uid() and role = 'admin'
-    )
-  );
+  using (public.is_admin(auth.uid()));
+
+drop policy if exists "Authenticated users can manage worksheets" on public.worksheets;
+create policy "Authenticated users can manage worksheets"
+  on public.worksheets for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
 
 insert into public.worksheets (name, slug, label)
 values ('Pilgrimage Affairs', 'Pilgrimage Affairs', 'مكاتب شؤون الحج')
@@ -134,34 +157,10 @@ create policy "Anyone can read timeline nodes"
 drop policy if exists "Admins can manage timeline nodes" on public.timeline_nodes;
 create policy "Admins can manage timeline nodes"
   on public.timeline_nodes for all
-  using (
-    exists (
-      select 1 from public.profiles
-      where id = auth.uid() and role = 'admin'
-    )
-  );
+  using (public.is_admin(auth.uid()));
 
--- ============================================
--- 4. Seed timeline data
--- ============================================
-insert into public.timeline_nodes (title, date, icon, progress, worksheet_id) values
-  ('بداية وصول الحجاج',                               '2026-04-18', 'pilgrim',       0, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('استلام المخيمات جاهزة',                            '2026-04-18', 'camping',       0, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('ادخال بيانات الاستعداد المسبق',                     '2026-03-25', 'approved',      0, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('اصدار التأشيرات',                                  '2026-03-20', 'passport',      0, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('رفع بيانات الحجاج وتكوين المجموعات',                '2026-02-08', 'group',        100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('الانتهاء من التعاقدات على خدمات النقل',              '2026-02-01', 'logistic',     100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('الانتهاء من التعاقدات على السكن',                    '2026-02-01', 'home',         100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('تحويل الأموال للسكن وخدمات النقل',                   '2026-01-20', 'accommodation',100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('تعيين الناقلات الجوية وجدولة الرحلات',               '2026-01-04', 'airplane',     100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('التعاقد على حزم الخدمات ودفع قيمتها',                '2026-01-04', 'box',          100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('تحويل الأموال المطلوبة للتعاقد على الخدمات الأساسية', '2025-12-21', 'credit-card',  100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('توقيع اتفاقية رغبات التفويج',                       '2025-11-09', 'application',  100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('توثيق التعاقدات مع الشركات في مؤتمر الحج',           '2025-11-09', 'contract',     100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('توقيع اتفاقياة وترتيب شؤون الحجاج',                 '2025-11-09', 'agreement',    100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('الموعد النهائي لإعلان تسجيل الحجاج',                 '2025-10-12', 'calendar',     100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('بدأ الاجتماعات التحضيرية',                          '2025-10-12', 'people',       100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('تأكيد الاحتفاظ بالمخيمات من الموسم السابق',          '2025-08-23', 'folder',       100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('الاطلاع على بيانات المخيمات عبر منصة نسك مسار',      '2025-07-26', 'data',         100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('استلام نموذج التوعية للضيوف الرحمن',                 '2025-06-08', 'checklist',    100, (select id from public.worksheets where slug = 'Pilgrimage Affairs')),
-  ('استلام وثيقة الترتيبات الأولية والبرنامج',           '2025-06-08', 'document',     100, (select id from public.worksheets where slug = 'Pilgrimage Affairs'));
+drop policy if exists "Authenticated users can manage timeline nodes" on public.timeline_nodes;
+create policy "Authenticated users can manage timeline nodes"
+  on public.timeline_nodes for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');

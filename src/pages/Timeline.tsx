@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import ReactCountryFlag from "react-country-flag";
 import TimelineTrack from "../components/TimelineTrack";
 import TimelineNode, { type NodeStatus } from "../components/TimelineNode";
-import { supabase, bgUrl, LOGO, type NodeRow, type WorksheetRow } from "../lib/supabase";
+import { supabase, bgUrl, getCompanyBrand, type NodeRow, type WorksheetRow } from "../lib/supabase";
 import { decodeWorksheetSlug } from "../lib/worksheets";
 
 function getNodeStatus(progress: number, date: string): NodeStatus {
@@ -56,7 +56,9 @@ function worksheetLabelText(worksheet?: WorksheetRow | null) {
 
 export default function Timeline() {
   const navigate = useNavigate();
-  const { worksheetSlug } = useParams();
+  const { company, worksheetSlug } = useParams();
+  const currentCompany = company || "alrajhi";
+  const brand = getCompanyBrand(currentCompany);
   const resolvedSlug = decodeWorksheetSlug(worksheetSlug);
   const pathRef = useRef<SVGPathElement>(null);
   const [points, setPoints] = useState<[number, number][]>([]);
@@ -68,8 +70,9 @@ export default function Timeline() {
     setLoading(true);
     supabase
       .from("worksheets")
-      .select("id,name,slug,label,country")
+      .select("id,name,slug,label,country,company")
       .eq("slug", resolvedSlug)
+      .eq("company", currentCompany)
       .maybeSingle()
       .then(async ({ data, error }) => {
         if (error || !data) {
@@ -81,20 +84,20 @@ export default function Timeline() {
         setWorksheet(data as WorksheetRow);
         const { data: nodeData } = await supabase
           .from("timeline_nodes")
-          .select("*")
+          .select("*, tasks:timeline_tasks(*)")
           .eq("worksheet_id", data.id)
           .order("date", { ascending: true });
         setNodes((nodeData ?? []) as NodeRow[]);
         setLoading(false);
       });
-  }, [resolvedSlug]);
+  }, [resolvedSlug, currentCompany]);
 
   useEffect(() => {
     if (!worksheet?.id) return;
 
     supabase
       .from("timeline_nodes")
-      .select("*")
+      .select("*, tasks:timeline_tasks(*)")
       .eq("worksheet_id", worksheet.id)
       .order("date", { ascending: true })
       .then(({ data }) => { if (data) setNodes(data as NodeRow[]); });
@@ -102,13 +105,22 @@ export default function Timeline() {
     const ch = supabase
       .channel(`timeline-rt-${worksheet.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "timeline_nodes", filter: `worksheet_id=eq.${worksheet.id}` }, ({ new: n }) => {
-        setNodes((prev) => prev.some((x) => x.id === (n as NodeRow).id) ? prev : [...prev, n as NodeRow].sort((a, b) => a.date.localeCompare(b.date)));
+        setNodes((prev) => prev.some((x) => x.id === (n as NodeRow).id) ? prev : [...prev, { ...n as NodeRow, tasks: [] }].sort((a, b) => a.date.localeCompare(b.date)));
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "timeline_nodes", filter: `worksheet_id=eq.${worksheet.id}` }, ({ new: n }) => {
-        setNodes((prev) => prev.map((x) => x.id === (n as NodeRow).id ? (n as NodeRow) : x));
+        setNodes((prev) => prev.map((x) => x.id === (n as NodeRow).id ? { ...x, ...n as NodeRow } : x));
       })
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "timeline_nodes", filter: `worksheet_id=eq.${worksheet.id}` }, ({ old: o }) => {
         setNodes((prev) => prev.filter((x) => x.id !== (o as NodeRow).id));
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "timeline_tasks" }, ({ new: n }) => {
+        setNodes((prev) => prev.map(node => node.id === n.node_id ? { ...node, tasks: [...(node.tasks || []), n as any] } : node));
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "timeline_tasks" }, ({ new: n }) => {
+        setNodes((prev) => prev.map(node => node.id === n.node_id ? { ...node, tasks: (node.tasks || []).map(t => t.id === n.id ? n as any : t) } : node));
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "timeline_tasks" }, ({ old: o }) => {
+        setNodes((prev) => prev.map(node => ({ ...node, tasks: (node.tasks || []).filter(t => t.id !== o.id) })));
       })
       .subscribe();
 
@@ -168,10 +180,11 @@ export default function Timeline() {
       <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat"
         style={{ backgroundImage: `url('${bgUrl()}')` }}>
         <div className="bg-white/95 rounded-2xl shadow-xl p-8 text-center" dir="rtl">
-          <h1 className="text-xl font-bold text-[#1E4483] mb-2">الـ Worksheet غير موجود</h1>
+          <h1 className="text-xl font-bold mb-2" style={{ color: brand.primary }}>الـ Worksheet غير موجود</h1>
           <p className="text-sm text-gray-500 mb-5">تأكد من الرابط أو أنشئ Worksheet جديد من لوحة التحكم.</p>
-          <button onClick={() => navigate("/dashboard")}
-            className="px-4 py-2 rounded-xl bg-[#1E4483] text-white font-bold text-sm cursor-pointer">
+          <button onClick={() => navigate(`/${currentCompany}/dashboard`)}
+            className="px-4 py-2 rounded-xl text-white font-bold text-sm cursor-pointer"
+            style={{ background: brand.primary }}>
             الذهاب إلى لوحة التحكم
           </button>
         </div>
@@ -192,10 +205,10 @@ export default function Timeline() {
             return (
               <g className="header-fade">
                 <rect x={hx - 155} y={hy - 145} width="310" height="260" rx="16" fill="white" opacity="0.95" filter="url(#fShadow)" />
-                <image href={LOGO} x={hx - 130} y={hy - 135} width="260" height="120"
+                <image href={brand.logo} x={hx - 130} y={hy - 135} width="260" height="120"
                   className="cursor-pointer" onClick={() => navigate("/login")} />
                 <foreignObject x={hx - 140} y={hy + 2} width="280" height="76">
-                  <div className="flex flex-col items-center justify-center text-[#1E4483]">
+                  <div className="flex flex-col items-center justify-center" style={{ color: brand.primary }}>
                     <div className="text-[26px] font-bold leading-tight">الجدول الزمني لمهام</div>
                     <div className="text-[26px] font-bold leading-tight flex items-center gap-2">
                       {worksheetLabelText(worksheet)}
@@ -211,7 +224,7 @@ export default function Timeline() {
                     </div>
                   </div>
                 </foreignObject>
-                <text x={hx} y={hy + 90} fontSize="14" fontWeight="700" fill="#B99A57" textAnchor="middle">
+                <text x={hx} y={hy + 90} fontSize="14" fontWeight="700" fill={brand.primary} textAnchor="middle">
                   {todayHijri}
                 </text>
               </g>
@@ -226,7 +239,7 @@ export default function Timeline() {
               <TimelineNode key={node.id} cx={cx} cy={cy} title={node.title} date={node.date}
                 icon={node.icon} fill={fill} stroke={stroke}
                 progress={node.progress} status={status} index={i}
-                isCurrent={i === currentIdx} />
+                isCurrent={i === currentIdx} tasks={node.tasks} />
             );
           })}
         </svg>

@@ -1,5 +1,5 @@
-export const DEFAULT_WORKSHEET_NAME = "Pilgrimage Affairs";
-export const DEFAULT_WORKSHEET_SLUG = "Pilgrimage Affairs";
+export const DEFAULT_WORKSHEET_NAME = "Pilgrimage-Affairs";
+export const DEFAULT_WORKSHEET_SLUG = "Pilgrimage-Affairs";
 
 export function decodeWorksheetSlug(raw?: string) {
   return decodeURIComponent(raw ?? DEFAULT_WORKSHEET_SLUG);
