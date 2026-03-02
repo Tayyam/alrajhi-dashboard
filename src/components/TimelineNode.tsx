@@ -55,13 +55,17 @@ const STATUS_RING: Record<NodeStatus, string> = {
 };
 
 export default function TimelineNode({
-  cx, cy, title, date, icon, fill, stroke, progress, status, index, isCurrent,
+  cx, cy, title, date, icon, fill, stroke, progress, status, index, isCurrent, company,
   nodeScale = 1, titlePlacement = "top", titleFontScale = 1,
   showProgress = true, showStatusRing = false, animate = true, titleShiftY = 0,
 }: Props) {
-  const brandColor  = "#C8AA5D";
+  const isSaudia = company === "saudia";
+  const brandColor  = isSaudia ? "#076C3A" : "#C8AA5D";
   const textColor   = STATUS_TEXT[status];
   const ringColor   = STATUS_RING[status];
+  const iconFilter = isSaudia
+    ? "brightness(0) saturate(100%) invert(25%) sepia(83%) saturate(913%) hue-rotate(108deg) brightness(92%) contrast(95%)"
+    : "brightness(0) invert(1)";
   const hijriDate   = date ? toHijri(date) : null;
   const [line1, line2] = splitTitle(title);
 
@@ -122,7 +126,7 @@ export default function TimelineNode({
 
       {/* Icon */}
       <image x={cx - iconSz / 2} y={cy - iconSz / 2} width={iconSz} height={iconSz}
-        href={iconUrl(icon)} style={{ filter: "brightness(0) invert(1)" }} />
+        href={iconUrl(icon)} style={{ filter: iconFilter }} />
 
       {/* Progress % */}
       {showProgress && (

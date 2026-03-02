@@ -33,7 +33,7 @@ export default function Login() {
   if (checking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url('${bgUrl()}')` }}>
+        style={{ backgroundImage: `url('${bgUrl(currentCompany)}')` }}>
         <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -41,7 +41,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat px-4"
-      style={{ backgroundImage: `url('${bgUrl()}')` }}>
+      style={{ backgroundImage: `url('${bgUrl(currentCompany)}')` }}>
       <div className="w-full max-w-md bg-white/95 rounded-2xl shadow-xl p-8 backdrop-blur-sm" dir="rtl">
         <div className="flex justify-center mb-6">
           <img src={brand.logo} alt="Logo" className="h-20 object-contain" />

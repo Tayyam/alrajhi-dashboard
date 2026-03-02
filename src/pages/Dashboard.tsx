@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, type ChangeEvent } from "react";
 import { Helmet } from "react-helmet";
 import { useNavigate, useParams } from "react-router-dom";
-import { supabase, iconUrl, BG_KEY, getCompanyBrand, progressFromTasks, sortTasks, worksheetLabel, type NodeRow, type TaskRow, type WorksheetRow } from "../lib/supabase";
+import { supabase, iconUrl, getCompanyBrand, progressFromTasks, sortTasks, worksheetLabel, type NodeRow, type TaskRow, type WorksheetRow } from "../lib/supabase";
 import * as XLSX from "xlsx";
 import { decodeWorksheetSlug, DEFAULT_WORKSHEET_SLUG, makeWorksheetSlug } from "../lib/worksheets";
 
@@ -304,7 +304,6 @@ export default function Dashboard() {
 
   const editIconRef = useRef<HTMLInputElement>(null);
   const addIconRef = useRef<HTMLInputElement>(null);
-  const bgRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -553,17 +552,6 @@ export default function Dashboard() {
     if (cur) await supabase.auth.setSession({ access_token: cur.access_token, refresh_token: cur.refresh_token });
     msg(`تم إنشاء حساب ${accountForm.email}`, "ok");
     setShowAccount(false); setAccountForm(emptyAccount); setSaving(null);
-  }
-
-  async function handleAssetUpload(e: ChangeEvent<HTMLInputElement>, key: string, label: string) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setSaving(-1);
-    const { error } = await supabase.storage.from("assets").upload(key, file, { upsert: true, contentType: file.type });
-    if (error) msg("خطأ: " + error.message, "err");
-    else msg(`تم تحديث ${label}`, "ok");
-    setSaving(null);
-    if (bgRef.current) bgRef.current.value = "";
   }
 
   async function handleBackup() {
@@ -1016,8 +1004,6 @@ export default function Dashboard() {
                     onClick={() => { handleExport(); setShowMenu(false); }} />
                   <MenuItem icon="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" label="نسخ احتياطي"
                     onClick={() => { handleBackup(); setShowMenu(false); }} />
-                  <MenuItem icon="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" label="تغيير الخلفية" asLabel
-                    input={<input ref={bgRef} type="file" accept="image/*" className="hidden" onChange={(e) => { handleAssetUpload(e, BG_KEY, "الخلفية"); setShowMenu(false); }} />} />
                   <hr className="border-gray-100 my-1" />
                   <MenuItem icon="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" label="إضافة حساب" onClick={() => { setShowAccount(true); setShowMenu(false); }} />
                   <hr className="border-gray-100 my-1" />

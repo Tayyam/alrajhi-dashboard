@@ -51,10 +51,10 @@ const render = (bucket: string, path: string, opts: string) =>
 export const iconUrl = (name?: string | null) =>
   render("icons", `${(name || "document").trim() || "document"}.png`, "width=64&height=64&resize=contain");
 
-export const bgUrl = () => render("assets", "background.jpeg", "width=1920&quality=90");
+export const bgUrl = (company?: string) =>
+  company === "saudia" ? "/backgroundsaudia.jpeg" : "/backgroundalrajhi.jpeg";
 
 export const LOGO    = "/logorajhi.webp";
-export const BG_KEY  = "background.jpeg";
 
 // ─── Brand ───────────────────────────────────────────────────────────────────
 

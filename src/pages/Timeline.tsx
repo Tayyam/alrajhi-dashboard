@@ -26,7 +26,7 @@ function getNodeFill(status: NodeStatus, idx: number, company?: string) {
   if (status === "success") return { fill: "url(#gSuccess)", stroke: "#86efac" };
   if (status === "warning") return { fill: "url(#gWarning)", stroke: "#fcd34d" };
   if (status === "danger")  return { fill: "url(#gDanger)",  stroke: "#fca5a5" };
-  if (company === "saudia") return { fill: "url(#gBlue)", stroke: "#5a7ad8" };
+  if (company === "saudia") return { fill: "#ffffff", stroke: "#076C3A" };
   return idx % 2 === 0
     ? { fill: "url(#gGold)", stroke: "#fbe48c" }
     : { fill: "url(#gBlue)", stroke: "#5a7ad8" };
@@ -200,7 +200,7 @@ export default function Timeline() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url('${bgUrl()}')` }}>
+        style={{ backgroundImage: `url('${bgUrl(currentCompany)}')` }}>
         <Helmet><title>{`جاري التحميل - ${companyName}`}</title><link rel="icon" href={brand.logo} /></Helmet>
         <div className="text-2xl font-bold text-white animate-pulse">جاري التحميل...</div>
       </div>
@@ -210,7 +210,7 @@ export default function Timeline() {
   if (!worksheet) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url('${bgUrl()}')` }}>
+        style={{ backgroundImage: `url('${bgUrl(currentCompany)}')` }}>
         <Helmet><title>{`Worksheet غير موجود - ${companyName}`}</title><link rel="icon" href={brand.logo} /></Helmet>
         <div className="bg-white/95 rounded-2xl shadow-xl p-8 text-center" dir="rtl">
           <h1 className="text-xl font-bold mb-2" style={{ color: brand.primary }}>الـ Worksheet غير موجود</h1>
@@ -230,7 +230,7 @@ export default function Timeline() {
   const hy = headerPt ? headerPt[1]     : 210;
 
   return (
-    <div className="min-h-screen bg-cover bg-center bg-no-repeat" style={{ backgroundImage: `url('${bgUrl()}')` }}>
+    <div className="min-h-screen bg-cover bg-center bg-no-repeat" style={{ backgroundImage: `url('${bgUrl(currentCompany)}')` }}>
       <Helmet><title>{pageTitle}</title><link rel="icon" href={brand.logo} /></Helmet>
 
       <div className="w-full max-w-[1990px] mx-auto lg:pr-15 lg:pl-25 pl-5 md:pl-10">
