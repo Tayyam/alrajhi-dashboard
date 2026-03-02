@@ -82,6 +82,7 @@ create table if not exists public.worksheets (
   label text,
   country text,
   company text not null default 'alrajhi',
+  show_subtasks boolean not null default true,
   created_at timestamptz not null default now()
 );
 
@@ -89,6 +90,7 @@ alter table public.worksheets enable row level security;
 alter table public.worksheets add column if not exists label text;
 alter table public.worksheets add column if not exists country text;
 alter table public.worksheets add column if not exists company text not null default 'alrajhi';
+alter table public.worksheets add column if not exists show_subtasks boolean not null default true;
 drop index if exists worksheets_slug_key;
 create unique index if not exists worksheets_company_slug_key on public.worksheets (company, slug);
 

@@ -291,7 +291,7 @@ export default function Dashboard() {
       setDefaultWorksheetId(null);
     }
 
-    const { data, error } = await supabase.from("worksheets").select("id,name,slug,label,country,company").eq("company", currentCompany).order("created_at", { ascending: true });
+    const { data, error } = await supabase.from("worksheets").select("id,name,slug,label,country,company,show_subtasks").eq("company", currentCompany).order("created_at", { ascending: true });
     if (error) {
       msg(error.message, "err");
       setLoading(false);
@@ -333,6 +333,28 @@ export default function Dashboard() {
 
     setDefaultWorksheetId(currentWorksheet.id);
     msg("تم تعيين الـ Worksheet الافتراضي", "ok");
+    setSaving(null);
+  }
+
+  async function handleToggleSubtasksVisibility() {
+    if (currentCompany !== "saudia" || !currentWorksheet) return;
+    const nextValue = !(currentWorksheet.show_subtasks ?? true);
+    setSaving(-1);
+    const { error } = await supabase
+      .from("worksheets")
+      .update({ show_subtasks: nextValue })
+      .eq("id", currentWorksheet.id)
+      .eq("company", currentCompany);
+
+    if (error) {
+      msg("خطأ: " + error.message, "err");
+      setSaving(null);
+      return;
+    }
+
+    setWorksheets((prev) => prev.map((w) => w.id === currentWorksheet.id ? { ...w, show_subtasks: nextValue } : w));
+    setCurrentWorksheet((prev) => prev ? { ...prev, show_subtasks: nextValue } : prev);
+    msg(nextValue ? "تم إظهار المهام الفرعية في الواجهة" : "تم إخفاء المهام الفرعية من الواجهة", "ok");
     setSaving(null);
   }
 
@@ -858,6 +880,13 @@ export default function Dashboard() {
                     label={defaultWorksheetId === currentWorksheet?.id ? "Worksheet الافتراضي الحالي" : "تعيين كافتراضي"}
                     onClick={async () => { await handleSetDefaultWorksheet(); setShowMenu(false); }}
                   />
+                  {currentCompany === "saudia" && (
+                    <MenuItem
+                      icon={currentWorksheet?.show_subtasks === false ? "M4 4l16 16M10.477 10.48a3 3 0 004.243 4.243M9.88 5.09A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.05 10.05 0 01-3.46 4.568M6.228 6.228A9.956 9.956 0 002.458 12c.52 1.65 1.45 3.11 2.665 4.238" : "M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"}
+                      label={currentWorksheet?.show_subtasks === false ? "إظهار المهام الفرعية في الواجهة" : "إخفاء المهام الفرعية من الواجهة"}
+                      onClick={async () => { await handleToggleSubtasksVisibility(); setShowMenu(false); }}
+                    />
+                  )}
                   <hr className="border-gray-100 my-1" />
                   <MenuItem icon="M12 4v16m8-8H4" label="Worksheet جديد"
                     onClick={() => { setShowWorksheetCreate(true); setShowMenu(false); }} />

@@ -31,6 +31,7 @@ export interface WorksheetRow {
   label?: string | null;
   country?: string | null;
   company: string;
+  show_subtasks?: boolean;
 }
 
 const render = (bucket: string, path: string, opts: string) =>

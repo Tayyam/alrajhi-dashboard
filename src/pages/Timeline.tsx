@@ -84,10 +84,11 @@ export default function Timeline() {
   const [nodes, setNodes] = useState<NodeRow[]>([]);
   const [worksheet, setWorksheet] = useState<WorksheetRow | null>(null);
   const [loading, setLoading] = useState(true);
+  const showSaudiaSubtasks = currentCompany === "saudia" && (worksheet?.show_subtasks ?? true);
 
   // For Saudia: put sub-tasks first, then main node on the same track
   const trackItems = useMemo<TrackItem[]>(() => {
-    if (currentCompany !== "saudia") return [];
+    if (!showSaudiaSubtasks) return [];
     const items: TrackItem[] = [];
     nodes.forEach((node, ni) => {
       (node.tasks ?? []).forEach((task, taskOrder) => {
@@ -96,13 +97,13 @@ export default function Timeline() {
       items.push({ type: "node", node, nodeIdx: ni });
     });
     return items;
-  }, [nodes, currentCompany]);
+  }, [nodes, showSaudiaSubtasks]);
 
   useEffect(() => {
     setLoading(true);
     supabase
       .from("worksheets")
-      .select("id,name,slug,label,country,company")
+      .select("id,name,slug,label,country,company,show_subtasks")
       .eq("slug", resolvedSlug)
       .eq("company", currentCompany)
       .maybeSingle()
@@ -179,7 +180,7 @@ export default function Timeline() {
     if (segStart >= 0) ranges.push([segStart, total]);
 
     const straightLen = ranges.reduce((s, [a, b]) => s + (b - a), 0);
-    const itemCount = currentCompany === "saudia" && trackItems.length > 0 ? trackItems.length : nodes.length;
+    const itemCount = showSaudiaSubtasks && trackItems.length > 0 ? trackItems.length : nodes.length;
     const step = straightLen / Math.max(itemCount - 1, 1);
     const pts: [number, number][] = [];
     for (let i = 0; i < itemCount; i++) {
@@ -195,10 +196,10 @@ export default function Timeline() {
     }
     pts.reverse();
     setPoints(pts);
-  }, [nodes, trackItems, currentCompany]);
+  }, [nodes, trackItems, showSaudiaSubtasks]);
 
   const currentIdx = nodes.length > 0 ? findCurrentIdx(nodes) : 0;
-  const itemCount  = currentCompany === "saudia" && trackItems.length > 0
+  const itemCount  = showSaudiaSubtasks && trackItems.length > 0
     ? trackItems.length
     : nodes.length;
   const svgHeight  = getTrackViewBoxHeight(itemCount);
@@ -283,7 +284,7 @@ export default function Timeline() {
             );
           })()}
 
-          {currentCompany === "saudia" && trackItems.length > 0
+          {showSaudiaSubtasks && trackItems.length > 0
             ? points.map(([cx, cy], i) => {
                 const item = trackItems[i];
                 if (!item) return null;
@@ -339,7 +340,7 @@ export default function Timeline() {
               })
             : points.map(([cx, cy], i) => {
                 const node = nodes[i];
-                const nodeProgress = node.progress;
+                const nodeProgress = currentCompany === "saudia" ? progressFromTasks(node) : node.progress;
                 const status = getNodeStatus(nodeProgress, node.date);
                 const { fill, stroke } = getNodeFill(status, i, currentCompany);
                 return (
