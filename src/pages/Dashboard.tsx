@@ -94,12 +94,35 @@ function TasksManager({ nodeId, tasks, iconList, msg, onRefresh, primary }: { no
               <div className="flex items-center gap-3">
                 {t.icon && <img src={iconUrl(t.icon)} className="w-6 h-6" alt="" style={{ filter: "brightness(0) invert(1)" }} />}
                 <span className="text-sm font-semibold">{t.title}</span>
-                <button
-                  onClick={() => handleToggleDone(t.id, !!t.is_done)}
-                  className="text-xs bg-white px-2 py-1 rounded shadow-sm font-bold"
-                  style={{ color: t.is_done ? "#16a34a" : "#ef4444" }}
+                <span
+                  className="text-xs bg-white px-2.5 py-1 rounded-full shadow-sm font-bold border"
+                  style={{ color: t.is_done ? "#16a34a" : "#ef4444", borderColor: t.is_done ? "#bbf7d0" : "#fecaca" }}
                 >
                   {t.is_done ? "true" : "false"}
+                </span>
+                <button
+                  onClick={() => handleToggleDone(t.id, !!t.is_done)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border-2 shadow-sm transition hover:shadow-md active:scale-95 cursor-pointer"
+                  style={{
+                    borderColor: !t.is_done ? "#22c55e" : "#ef4444",
+                    background: !t.is_done ? "#f0fdf4" : "#fef2f2",
+                    color: !t.is_done ? "#16a34a" : "#dc2626",
+                  }}
+                  title={`تعيين الحالة: ${!t.is_done ? "true" : "false"}`}
+                  aria-label={`تعيين الحالة: ${!t.is_done ? "true" : "false"}`}
+                >
+                  {!t.is_done ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.4} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  )}
+                  <span className="text-[11px] font-extrabold" dir="ltr">
+                    {!t.is_done ? "true" : "false"}
+                  </span>
                 </button>
               </div>
               <button onClick={() => handleDelete(t.id)} className="text-red-500 hover:text-red-700 p-1">
@@ -744,7 +767,7 @@ export default function Dashboard() {
           <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
             className="w-full px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm" placeholder="عنوان المهمة" />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">التاريخ</label>
             <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
@@ -767,9 +790,9 @@ export default function Dashboard() {
         </div>
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1">الأيقونة</label>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
             <select value={form.icon} onChange={(e) => setForm({ ...form, icon: e.target.value })}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm">
+              className="w-full sm:flex-1 px-3 py-2 border border-gray-300 rounded-xl outline-none focus:border-[#1E4483] text-sm">
               {iconList.map((ic) => <option key={ic} value={ic}>{ic}</option>)}
             </select>
             <img src={iconUrl(form.icon)} alt="" className="w-8 h-8 rounded-lg bg-gray-100 p-1" />
@@ -904,7 +927,7 @@ export default function Dashboard() {
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title="إضافة مهمة جديدة">
         {formFields(addForm, setAddForm, addIconRef)}
-        <div className="flex gap-3 mt-6">
+        <div className="flex flex-col-reverse sm:flex-row gap-3 mt-6">
           <button onClick={handleAdd} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: themeP }}>إضافة</button>
           <button onClick={() => { setShowAdd(false); setAddForm(emptyForm); }} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
         </div>
@@ -912,7 +935,7 @@ export default function Dashboard() {
 
       <Modal open={!!editNode} onClose={() => setEditNode(null)} title="تعديل المهمة">
         {formFields(editForm, setEditForm, editIconRef, editNode?.icon)}
-        <div className="flex gap-3 mt-6">
+        <div className="flex flex-col-reverse sm:flex-row gap-3 mt-6">
           <button onClick={handleEdit} className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm cursor-pointer" style={{ background: themeP }}>حفظ التعديلات</button>
           <button onClick={() => setEditNode(null)} className="flex-1 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold text-sm hover:bg-gray-300 cursor-pointer">إلغاء</button>
         </div>
@@ -1243,9 +1266,9 @@ export default function Dashboard() {
 function Modal({ open, onClose, title, children, sm }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; sm?: boolean }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div className={`bg-white rounded-2xl shadow-xl w-full ${sm ? "max-w-md" : "max-w-lg"} p-6`} dir="rtl" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold mb-5" style={{ color: "#1E4483" }}>{title}</h2>
+    <div className="fixed inset-0 z-40 bg-black/40 flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
+      <div className={`bg-white rounded-2xl shadow-xl w-full ${sm ? "max-w-md" : "max-w-2xl"} p-4 sm:p-6 max-h-[92vh] overflow-y-auto`} dir="rtl" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-base sm:text-lg font-bold mb-4 sm:mb-5" style={{ color: "#1E4483" }}>{title}</h2>
         {children}
       </div>
     </div>
