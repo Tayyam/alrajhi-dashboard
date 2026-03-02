@@ -36,7 +36,8 @@ export interface WorksheetRow {
 const render = (bucket: string, path: string, opts: string) =>
   `${url}/storage/v1/render/image/public/${bucket}/${path}?${opts}`;
 
-export const iconUrl = (name: string) => render("icons", `${name}.png`, "width=64&height=64&resize=contain");
+export const iconUrl = (name?: string | null) =>
+  render("icons", `${(name || "document").trim() || "document"}.png`, "width=64&height=64&resize=contain");
 export const bgUrl = () => render("assets", "background.jpeg", "width=1920&quality=90");
 export const LOGO = "/logorajhi.webp";
 export const BG_KEY = "background.jpeg";

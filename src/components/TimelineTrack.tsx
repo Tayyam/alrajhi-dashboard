@@ -1,44 +1,93 @@
 import { type RefObject } from "react";
 
-export const TRACK = "M 560,245 H 1370 A 130 130 0 1 1 1370,505 H 130 A 110 130 0 1 0 130,765 H 1370";
+// ─── Track geometry constants ───────────────────────────────────────────────
+const START_X   = 560;
+const RIGHT_X   = 1370;
+const LEFT_X    = 130;
+const START_Y   = 245;
+const SPACING   = 260;   // = arc diameter (radius 130)
+const MIN_ROWS  = 3;
+const NODES_PER_EXTRA_ROW = 30;
+const BASE_NODE_THRESHOLD = 30;
+
+// ─── Exported utilities (used by Timeline.tsx for dynamic viewBox) ───────────
+
+export function getTrackRowCount(nodeCount: number): number {
+  if (nodeCount <= BASE_NODE_THRESHOLD) return MIN_ROWS;
+  return MIN_ROWS + Math.ceil((nodeCount - BASE_NODE_THRESHOLD) / NODES_PER_EXTRA_ROW);
+}
+
+export function getTrackViewBoxHeight(nodeCount: number): number {
+  const rows = getTrackRowCount(nodeCount);
+  // For 3 rows: 245 + 2×260 + 119 = 884  (original viewBox height)
+  return START_Y + (rows - 1) * SPACING + 119;
+}
+
+/** Build the SVG path d-string for `numRows` rows. */
+function buildTrackPath(numRows: number): string {
+  let d = `M ${START_X},${START_Y} H ${RIGHT_X}`;
+  let side: "right" | "left" = "right";
+
+  for (let row = 1; row < numRows; row++) {
+    const y = START_Y + row * SPACING;
+    if (side === "right") {
+      // Arc curves around right edge, then row goes left
+      d += ` A 130 130 0 1 1 ${RIGHT_X},${y} H ${LEFT_X}`;
+      side = "left";
+    } else {
+      // Arc curves around left edge, then row goes right
+      d += ` A 110 130 0 1 0 ${LEFT_X},${y} H ${RIGHT_X}`;
+      side = "right";
+    }
+  }
+
+  return d;
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 interface Props {
   pathRef: RefObject<SVGPathElement | null>;
   company?: string;
+  /** Total track items (nodes + sub-tasks). Controls how many rows are generated. */
+  nodeCount?: number;
 }
 
-export default function TimelineTrack({ pathRef, company }: Props) {
-  const isSaudia = company === "saudia";
-  const baseStroke = isSaudia ? "#046A38" : "#253c8e";
+export default function TimelineTrack({ pathRef, company, nodeCount = 0 }: Props) {
+  const isSaudia    = company === "saudia";
+  const baseStroke  = isSaudia ? "#046A38" : "#253c8e";
   const accentStroke = isSaudia ? "#D5F2E1" : "#c9a227";
-  const glowStroke = isSaudia ? "#FFFEFF" : "#fde68a";
+  const glowStroke  = isSaudia ? "#FFFEFF" : "#fde68a";
+
+  const numRows = getTrackRowCount(nodeCount);
+  const TRACK   = buildTrackPath(numRows);
 
   return (
     <>
       <defs>
         <radialGradient id="gBlue" cx="40%" cy="35%" r="65%">
-          <stop offset="0%" stopColor={isSaudia ? "#1B8E56" : "#5b82e0"} />
-          <stop offset="55%" stopColor={isSaudia ? "#046A38" : "#2a4ab0"} />
+          <stop offset="0%"   stopColor={isSaudia ? "#1B8E56" : "#5b82e0"} />
+          <stop offset="55%"  stopColor={isSaudia ? "#046A38" : "#2a4ab0"} />
           <stop offset="100%" stopColor={isSaudia ? "#034F2A" : "#142060"} />
         </radialGradient>
         <radialGradient id="gGold" cx="40%" cy="35%" r="65%">
-          <stop offset="0%" stopColor={isSaudia ? "#8CCFAE" : "#f3d16f"} />
-          <stop offset="55%" stopColor={isSaudia ? "#1E8C5A" : "#9B7619"} />
+          <stop offset="0%"   stopColor={isSaudia ? "#8CCFAE" : "#f3d16f"} />
+          <stop offset="55%"  stopColor={isSaudia ? "#1E8C5A" : "#9B7619"} />
           <stop offset="100%" stopColor={isSaudia ? "#046A38" : "#C8AA5D"} />
         </radialGradient>
         <radialGradient id="gSuccess" cx="40%" cy="35%" r="65%">
-          <stop offset="0%" stopColor="#4ade80" />
-          <stop offset="55%" stopColor="#16a34a" />
+          <stop offset="0%"   stopColor="#4ade80" />
+          <stop offset="55%"  stopColor="#16a34a" />
           <stop offset="100%" stopColor="#15803d" />
         </radialGradient>
         <radialGradient id="gWarning" cx="40%" cy="35%" r="65%">
-          <stop offset="0%" stopColor="#fbbf24" />
-          <stop offset="55%" stopColor="#d97706" />
+          <stop offset="0%"   stopColor="#fbbf24" />
+          <stop offset="55%"  stopColor="#d97706" />
           <stop offset="100%" stopColor="#92400e" />
         </radialGradient>
         <radialGradient id="gDanger" cx="40%" cy="35%" r="65%">
-          <stop offset="0%" stopColor="#f87171" />
-          <stop offset="55%" stopColor="#dc2626" />
+          <stop offset="0%"   stopColor="#f87171" />
+          <stop offset="55%"  stopColor="#dc2626" />
           <stop offset="100%" stopColor="#991b1b" />
         </radialGradient>
         <filter id="fShadow" x="-40%" y="-40%" width="180%" height="180%">
@@ -52,8 +101,8 @@ export default function TimelineTrack({ pathRef, company }: Props) {
           </feMerge>
         </filter>
         <radialGradient id="glowDot">
-          <stop offset="0%" stopColor={glowStroke} />
-          <stop offset="40%" stopColor={accentStroke} stopOpacity="0.6" />
+          <stop offset="0%"   stopColor={glowStroke} />
+          <stop offset="40%"  stopColor={accentStroke} stopOpacity="0.6" />
           <stop offset="100%" stopColor={accentStroke} stopOpacity="0" />
         </radialGradient>
       </defs>

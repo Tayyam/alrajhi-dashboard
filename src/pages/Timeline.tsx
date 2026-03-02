@@ -1,10 +1,10 @@
-import { useLayoutEffect, useRef, useState, useEffect } from "react";
+import { useLayoutEffect, useRef, useState, useEffect, useMemo } from "react";
 import { Helmet } from "react-helmet";
 import { useNavigate, useParams } from "react-router-dom";
 import ReactCountryFlag from "react-country-flag";
-import TimelineTrack from "../components/TimelineTrack";
+import TimelineTrack, { getTrackViewBoxHeight } from "../components/TimelineTrack";
 import TimelineNode, { type NodeStatus } from "../components/TimelineNode";
-import { supabase, bgUrl, getCompanyBrand, type NodeRow, type WorksheetRow } from "../lib/supabase";
+import { supabase, bgUrl, getCompanyBrand, type NodeRow, type TaskRow, type WorksheetRow } from "../lib/supabase";
 import { decodeWorksheetSlug } from "../lib/worksheets";
 
 function getNodeStatus(progress: number, date: string): NodeStatus {
@@ -62,6 +62,10 @@ function worksheetLabelText(worksheet?: WorksheetRow | null) {
   return worksheet.label?.trim() || worksheet.name;
 }
 
+type TrackItem =
+  | { type: "node"; node: NodeRow; nodeIdx: number }
+  | { type: "task"; task: TaskRow; nodeIdx: number; taskOrder: number };
+
 export default function Timeline() {
   const navigate = useNavigate();
   const { company, worksheetSlug } = useParams();
@@ -74,6 +78,19 @@ export default function Timeline() {
   const [nodes, setNodes] = useState<NodeRow[]>([]);
   const [worksheet, setWorksheet] = useState<WorksheetRow | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // For Saudia: put sub-tasks first, then main node on the same track
+  const trackItems = useMemo<TrackItem[]>(() => {
+    if (currentCompany !== "saudia") return [];
+    const items: TrackItem[] = [];
+    nodes.forEach((node, ni) => {
+      (node.tasks ?? []).forEach((task, taskOrder) => {
+        items.push({ type: "task", task, nodeIdx: ni, taskOrder });
+      });
+      items.push({ type: "node", node, nodeIdx: ni });
+    });
+    return items;
+  }, [nodes, currentCompany]);
 
   useEffect(() => {
     setLoading(true);
@@ -156,9 +173,10 @@ export default function Timeline() {
     if (segStart >= 0) ranges.push([segStart, total]);
 
     const straightLen = ranges.reduce((s, [a, b]) => s + (b - a), 0);
-    const step = straightLen / (nodes.length - 1);
+    const itemCount = currentCompany === "saudia" && trackItems.length > 0 ? trackItems.length : nodes.length;
+    const step = straightLen / Math.max(itemCount - 1, 1);
     const pts: [number, number][] = [];
-    for (let i = 0; i < nodes.length; i++) {
+    for (let i = 0; i < itemCount; i++) {
       let target = step * i;
       let len = 0;
       for (const [a, b] of ranges) {
@@ -171,9 +189,13 @@ export default function Timeline() {
     }
     pts.reverse();
     setPoints(pts);
-  }, [nodes]);
+  }, [nodes, trackItems, currentCompany]);
 
   const currentIdx = nodes.length > 0 ? findCurrentIdx(nodes) : 0;
+  const itemCount  = currentCompany === "saudia" && trackItems.length > 0
+    ? trackItems.length
+    : nodes.length;
+  const svgHeight  = getTrackViewBoxHeight(itemCount);
   const pageTitle = `${worksheet ? worksheetLabelText(worksheet) : "الجدول الزمني"} - ${companyName}`;
 
   if (loading) {
@@ -218,8 +240,8 @@ export default function Timeline() {
         <link rel="icon" href={brand.logo} />
       </Helmet>
       <div className="w-full max-w-[1990px] mx-auto lg:pr-15 lg:pl-25 pl-5 md:pl-10">
-        <svg viewBox="0 0 1600 884" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" direction="ltr">
-          <TimelineTrack pathRef={pathRef} company={currentCompany} />
+        <svg viewBox={`0 0 1600 ${svgHeight}`} xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" direction="ltr">
+          <TimelineTrack pathRef={pathRef} company={currentCompany} nodeCount={itemCount} />
 
           {(() => {
             const hasPoints = points.length > 0;
@@ -255,18 +277,62 @@ export default function Timeline() {
             );
           })()}
 
-          {points.map(([cx, cy], i) => {
-            const node = nodes[i];
-            const nodeProgress = currentCompany === "saudia" ? progressFromTasks(node) : node.progress;
-            const status = getNodeStatus(nodeProgress, node.date);
-            const { fill, stroke } = getNodeFill(status, i);
-            return (
-              <TimelineNode key={node.id} cx={cx} cy={cy} title={node.title} date={node.date}
-                icon={node.icon} fill={fill} stroke={stroke}
-                progress={nodeProgress} status={status} index={i}
-                isCurrent={i === currentIdx} tasks={node.tasks} company={currentCompany} />
-            );
-          })}
+          {currentCompany === "saudia" && trackItems.length > 0
+            ? points.map(([cx, cy], i) => {
+                const item = trackItems[i];
+                if (!item) return null;
+
+                if (item.type === "node") {
+                  const { node, nodeIdx } = item;
+                  const nodeProgress = progressFromTasks(node);
+                  const status = getNodeStatus(nodeProgress, node.date);
+                  const { fill, stroke } = getNodeFill(status, nodeIdx);
+                  return (
+                    <TimelineNode key={`node-${node.id}`} cx={cx} cy={cy}
+                      title={node.title} date={node.date}
+                      icon={node.icon} fill={fill} stroke={stroke}
+                      progress={nodeProgress} status={status} index={nodeIdx}
+                      isCurrent={nodeIdx === currentIdx} company={currentCompany} />
+                  );
+                }
+
+                // Sub-task: same node look but smaller
+                const { task, nodeIdx: tNodeIdx, taskOrder } = item;
+                const isDone = !!task.is_done;
+                const taskStatus: NodeStatus = isDone ? "success" : "default";
+                const taskFill   = isDone ? "url(#gSuccess)" : getNodeFill(taskStatus, tNodeIdx).fill;
+                const taskStroke = isDone ? "#86efac"        : getNodeFill(taskStatus, tNodeIdx).stroke;
+                return (
+                  <TimelineNode
+                    key={`task-${task.id}`}
+                    cx={cx} cy={cy}
+                    title={task.title}
+                    icon={task.icon ?? ""}
+                    fill={taskFill}
+                    stroke={taskStroke}
+                    progress={isDone ? 100 : 0}
+                    status={taskStatus}
+                    index={i}
+                    isCurrent={false}
+                    company={currentCompany}
+                    nodeScale={0.58}
+                    titlePlacement={taskOrder % 2 === 0 ? "top" : "bottom"}
+                    titleFontScale={1.45}
+                  />
+                );
+              })
+            : points.map(([cx, cy], i) => {
+                const node = nodes[i];
+                const nodeProgress = node.progress;
+                const status = getNodeStatus(nodeProgress, node.date);
+                const { fill, stroke } = getNodeFill(status, i);
+                return (
+                  <TimelineNode key={node.id} cx={cx} cy={cy} title={node.title} date={node.date}
+                    icon={node.icon} fill={fill} stroke={stroke}
+                    progress={nodeProgress} status={status} index={i}
+                    isCurrent={i === currentIdx} company={currentCompany} />
+                );
+              })}
         </svg>
       </div>
     </div>

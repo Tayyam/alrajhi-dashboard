@@ -446,19 +446,30 @@ export default function Dashboard() {
   }
 
   function handleDownloadImportTemplate() {
-    const rows = [
-      {
-        "العنوان": "",
-        "التاريخ": "",
-        "الأيقونة": "document",
-        "نسبة الإكتمال (%)": 0,
-      },
-    ];
+    const rows = currentCompany === "saudia"
+      ? [
+        {
+          "اسم المهمة": "",
+          "التاريخ": "",
+          "اسم المهمة الفرعية": "",
+          "true or not": "false",
+        },
+      ]
+      : [
+        {
+          "العنوان": "",
+          "التاريخ": "",
+          "الأيقونة": "document",
+          "نسبة الإكتمال (%)": 0,
+        },
+      ];
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = [{ wch: 45 }, { wch: 16 }, { wch: 16 }, { wch: 18 }];
+    ws["!cols"] = currentCompany === "saudia"
+      ? [{ wch: 30 }, { wch: 16 }, { wch: 35 }, { wch: 14 }]
+      : [{ wch: 45 }, { wch: 16 }, { wch: 16 }, { wch: 18 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Template");
-    XLSX.writeFile(wb, "timeline_import_template.xlsx");
+    XLSX.writeFile(wb, currentCompany === "saudia" ? "timeline_import_template_saudia.xlsx" : "timeline_import_template.xlsx");
   }
 
   async function handleImport(file: File) {
@@ -471,24 +482,78 @@ export default function Dashboard() {
         if (!rows.length) { msg("الملف فارغ", "err"); return; }
         setSaving(-1);
         let u = 0, ins = 0, fail = 0;
-        for (const row of rows) {
-          const title = String(row["العنوان"] ?? row["title"] ?? "");
-          const date = toIsoDate(row["التاريخ"] ?? row["date"]);
-          const icon = String(row["الأيقونة"] ?? row["icon"] ?? "document");
-          const progress = Math.max(0, Math.min(100, Number(row["نسبة الإكتمال (%)"] ?? row["progress"] ?? 0)));
-          if (!title || !date) { fail++; continue; }
-          const ex = nodes.find((n) => n.title === title);
-          if (ex) {
-            const { error } = await supabase.from("timeline_nodes").update({ title, date, icon, progress }).eq("id", ex.id);
-            if (error) fail++; else u++;
-          } else {
-            const { error } = await supabase.from("timeline_nodes").insert({ title, date, icon, progress, worksheet_id: currentWorksheet.id });
-            if (error) fail++; else ins++;
+        if (currentCompany === "saudia") {
+          const today = new Date().toISOString().slice(0, 10);
+          const nodeMap = new Map<string, { id: number; taskNames: Set<string> }>();
+          for (const n of nodes) {
+            nodeMap.set(n.title, { id: n.id, taskNames: new Set((n.tasks ?? []).map((t) => t.title)) });
+          }
+
+          const parseBool = (v: unknown) => {
+            const s = String(v ?? "").trim().toLowerCase();
+            return s === "true" || s === "1" || s === "yes";
+          };
+
+          for (const row of rows) {
+            const taskTitle = String(row["اسم المهمة"] ?? row["task_name"] ?? row["العنوان"] ?? "").trim();
+            const taskDate = toIsoDate(row["التاريخ"] ?? row["date"]) || today;
+            const subTaskTitle = String(row["اسم المهمة الفرعية"] ?? row["sub_task_name"] ?? row["sub_task"] ?? "").trim();
+            const isDone = parseBool(row["true or not"] ?? row["is_done"] ?? row["done"]);
+
+            if (!taskTitle || !subTaskTitle || !taskDate) { fail++; continue; }
+
+            let nodeEntry = nodeMap.get(taskTitle);
+            if (!nodeEntry) {
+              const { data: createdNode, error: nodeErr } = await supabase
+                .from("timeline_nodes")
+                .insert({ title: taskTitle, date: taskDate, icon: "document", progress: 0, worksheet_id: currentWorksheet.id })
+                .select("id")
+                .maybeSingle();
+
+              if (nodeErr || !createdNode?.id) { fail++; continue; }
+              nodeEntry = { id: createdNode.id as number, taskNames: new Set<string>() };
+              nodeMap.set(taskTitle, nodeEntry);
+            }
+
+            if (nodeEntry.taskNames.has(subTaskTitle)) {
+              const { error } = await supabase
+                .from("timeline_tasks")
+                .update({ is_done: isDone })
+                .eq("node_id", nodeEntry.id)
+                .eq("title", subTaskTitle);
+              if (error) fail++; else u++;
+            } else {
+              const { error } = await supabase
+                .from("timeline_tasks")
+                .insert({ node_id: nodeEntry.id, title: subTaskTitle, is_done: isDone, icon: null });
+              if (error) fail++; else {
+                ins++;
+                nodeEntry.taskNames.add(subTaskTitle);
+              }
+            }
+          }
+        } else {
+          for (const row of rows) {
+            const title = String(row["العنوان"] ?? row["title"] ?? "");
+            const date = toIsoDate(row["التاريخ"] ?? row["date"]);
+            const icon = String(row["الأيقونة"] ?? row["icon"] ?? "document");
+            const progress = Math.max(0, Math.min(100, Number(row["نسبة الإكتمال (%)"] ?? row["progress"] ?? 0)));
+            if (!title || !date) { fail++; continue; }
+            const ex = nodes.find((n) => n.title === title);
+            if (ex) {
+              const { error } = await supabase.from("timeline_nodes").update({ title, date, icon, progress }).eq("id", ex.id);
+              if (error) fail++; else u++;
+            } else {
+              const { error } = await supabase.from("timeline_nodes").insert({ title, date, icon, progress, worksheet_id: currentWorksheet.id });
+              if (error) fail++; else ins++;
+            }
           }
         }
         await fetchNodes(currentWorksheet.id);
         if (u === 0 && ins === 0) {
-          msg("لم يتم استيراد أي صف. تأكد من الأعمدة وصيغة التاريخ (YYYY-MM-DD).", "err");
+          msg(currentCompany === "saudia"
+            ? "لم يتم استيراد أي صف. تأكد من الأعمدة: اسم المهمة، التاريخ، اسم المهمة الفرعية، true or not."
+            : "لم يتم استيراد أي صف. تأكد من الأعمدة وصيغة التاريخ (YYYY-MM-DD).", "err");
         } else if (fail > 0) {
           msg(`تم: ${u} تحديث، ${ins} إضافة، ${fail} صف فشل`, "ok");
         } else {
@@ -1067,7 +1132,9 @@ export default function Dashboard() {
       <Modal open={showImportModal} onClose={() => { setShowImportModal(false); setImportFile(null); }} title="رفع ملف Excel" sm>
         <div className="space-y-4">
           <p className="text-sm text-gray-500">
-            ارفع ملف Excel بصيغة الأعمدة المعتمدة، أو قم بتنزيل قالب جاهز.
+            {currentCompany === "saudia"
+              ? "ارفع ملف Excel بالأعمدة: اسم المهمة، التاريخ، اسم المهمة الفرعية، true or not."
+              : "ارفع ملف Excel بصيغة الأعمدة المعتمدة، أو قم بتنزيل قالب جاهز."}
           </p>
           <label className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold cursor-pointer hover:bg-gray-200 transition">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 6l-4-4m0 0L8 6m4-4v13" /></svg>
