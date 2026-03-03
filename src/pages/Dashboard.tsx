@@ -921,10 +921,12 @@ export default function Dashboard() {
         <link rel="icon" href={brand.logo} />
       </Helmet>
       <header className="sticky top-0 z-30 border-b border-gray-200" style={{ background: themeP }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        {/* Mobile: two rows; sm+: single row */}
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          {/* Logo + Title */}
+          <div className="flex items-center gap-2">
             <div className="bg-white rounded-lg px-2 py-1 flex items-center cursor-pointer" onClick={() => navigate(`/${currentCompany}/${encodeURIComponent(currentWorksheet?.slug ?? DEFAULT_WORKSHEET_SLUG)}`)}>
-              <img src={brand.logo} alt="Logo" className="h-9 object-contain" />
+              <img src={brand.logo} alt="Logo" className="h-8 object-contain" />
             </div>
             <div className="hidden sm:block">
               <h1 className="text-base font-bold text-white">لوحة التحكم</h1>
@@ -932,20 +934,21 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* Controls */}
           <div className="flex items-center gap-2">
             <select
               value={currentWorksheet?.slug ?? ""}
               onChange={(e) => navigate(`/${currentCompany}/dashboard/${encodeURIComponent(e.target.value)}`)}
-              className="px-3 py-2 rounded-lg text-sm font-semibold bg-white text-[#1E4483] outline-none border border-white/30 min-w-52"
+              className="flex-1 sm:flex-none px-3 py-2 rounded-lg text-sm font-semibold bg-white text-[#1E4483] outline-none border border-white/30 min-w-0 sm:min-w-52 truncate"
             >
               {worksheets.map((w) => <option key={w.id} value={w.slug}>{w.country ? `${worksheetLabel(w)} (${w.country})` : worksheetLabel(w)}</option>)}
             </select>
-            <button onClick={() => setShowAdd(true)} className={`${btn} text-white`} style={{ background: themeS }}>
+            <button onClick={() => setShowAdd(true)} className={`${btn} text-white shrink-0`} style={{ background: themeS }}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
               <span className="hidden sm:inline">إضافة مهمة</span>
             </button>
 
-            <div className="relative" ref={menuRef}>
+            <div className="relative shrink-0" ref={menuRef}>
               <button onClick={() => setShowMenu(!showMenu)} className={btnOut} style={outStyle}>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" /></svg>
                 <span className="hidden sm:inline">المزيد</span>
@@ -1301,7 +1304,7 @@ export default function Dashboard() {
         </div>
       </Modal>
 
-      <main className="mx-auto px-4 sm:px-6 py-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${themeP} transparent ${themeP} ${themeP}` }} />
@@ -1312,13 +1315,13 @@ export default function Dashboard() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ background: `${themeP}08` }} className="border-b border-gray-200">
-                    <th className="px-4 py-3 text-right font-bold text-gray-600 w-12">#</th>
+                    <th className="px-4 py-3 text-right font-bold text-gray-600 w-12 hidden sm:table-cell">#</th>
                     <th className="px-4 py-3 text-right font-bold text-gray-600 w-full">العنوان</th>
-                    <th className="px-4 py-3 text-right font-bold text-gray-600 w-32">التاريخ</th>
-                    <th className="px-4 py-3 text-right font-bold text-gray-600 w-36">الأيقونة</th>
-                    <th className="px-4 py-3 text-right font-bold text-gray-600 w-32">الإكتمال</th>
+                    <th className="px-4 py-3 text-right font-bold text-gray-600 w-32 hidden sm:table-cell">التاريخ</th>
+                    <th className="px-4 py-3 text-right font-bold text-gray-600 w-36 hidden md:table-cell">الأيقونة</th>
+                    <th className="px-4 py-3 text-right font-bold text-gray-600 w-32 hidden sm:table-cell">الإكتمال</th>
                     <th className="px-4 py-3 text-right font-bold text-gray-600 w-24">الحالة</th>
-                    <th className="px-4 py-3 text-center font-bold text-gray-600 w-28">إجراءات</th>
+                    <th className="px-4 py-3 text-center font-bold text-gray-600 w-24">إجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1326,26 +1329,26 @@ export default function Dashboard() {
                     const nodeProgress = currentCompany === "saudia" ? progressFromTasks(node) : node.progress;
                     return (
                     <tr key={node.id} className={`border-b border-gray-100 hover:bg-gray-50/50 transition ${saving === node.id ? "opacity-50" : ""}`}>
-                      <td className="px-4 py-3 whitespace-nowrap"><span className="text-gray-400 font-mono text-xs">{idx + 1}</span></td>
-                      <td className="px-4 py-3 font-medium whitespace-nowrap">{node.title}</td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDateAr(node.date)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-4 py-3 whitespace-nowrap hidden sm:table-cell"><span className="text-gray-400 font-mono text-xs">{idx + 1}</span></td>
+                      <td className="px-3 sm:px-4 py-3 font-medium">{node.title}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap hidden sm:table-cell">{formatDateAr(node.date)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap hidden md:table-cell">
                         <div className="flex items-center gap-2">
                           <img src={iconUrl(node.icon)} alt={node.icon} className="w-6 h-6" />
                           <span className="text-gray-500 text-xs">{node.icon}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
+                      <td className="px-4 py-3 whitespace-nowrap hidden sm:table-cell">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden min-w-[60px]">
                             <div className="h-full rounded-full transition-all"
                               style={{ width: `${nodeProgress}%`, backgroundColor: nodeProgress === 100 ? "#22c55e" : nodeProgress > 50 ? themeS : "#ef4444" }} />
                           </div>
                           <span className="text-xs text-gray-500 font-mono w-8 text-left" dir="ltr">{nodeProgress}%</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">{statusBadge(nodeProgress, node.date)}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 sm:px-4 py-3 whitespace-nowrap">{statusBadge(nodeProgress, node.date)}</td>
+                      <td className="px-2 sm:px-4 py-3">
                         <div className="flex items-center justify-center gap-1">
                           <button onClick={() => { setEditNode(node); setEditForm({ title: node.title, date: node.date, icon: node.icon, progress: nodeProgress }); }}
                             className="p-1.5 rounded-lg text-gray-400 hover:text-[#1E4483] hover:bg-blue-50 transition cursor-pointer" title="تعديل">
@@ -1362,9 +1365,9 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
-            <div className="px-4 py-3 border-t border-gray-200 text-xs text-gray-500 flex items-center justify-between" style={{ background: `${themeP}05` }}>
+            <div className="px-4 py-3 border-t border-gray-200 text-xs text-gray-500 flex flex-wrap items-center justify-between gap-1" style={{ background: `${themeP}05` }}>
               <span>إجمالي: <b>{nodes.length}</b> مهمة</span>
-              <span style={{ color: themeS }}>اضغط على زر التعديل لتحرير المهمة</span>
+              <span className="hidden sm:inline" style={{ color: themeS }}>اضغط على زر التعديل لتحرير المهمة</span>
             </div>
           </div>
         )}

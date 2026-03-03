@@ -233,9 +233,10 @@ export default function Timeline() {
     <div className="min-h-screen bg-cover bg-center bg-no-repeat" style={{ backgroundImage: `url('${bgUrl(currentCompany)}')` }}>
       <Helmet><title>{pageTitle}</title><link rel="icon" href={brand.logo} /></Helmet>
 
-      <div className="w-full max-w-[1990px] mx-auto lg:pr-15 lg:pl-25 pl-5 md:pl-10">
+      <div className="w-full overflow-x-auto" style={{ WebkitOverflowScrolling: "touch" }}>
         <svg viewBox={`0 0 1600 ${svgHeight}`} xmlns="http://www.w3.org/2000/svg"
-          preserveAspectRatio="xMidYMid meet" direction="ltr">
+          preserveAspectRatio="xMidYMid meet" direction="ltr"
+          style={{ minWidth: "700px", width: "100%", display: "block" }}>
           <TimelineTrack pathRef={pathRef} company={currentCompany} nodeCount={itemCount} />
 
           {/* Header card */}
